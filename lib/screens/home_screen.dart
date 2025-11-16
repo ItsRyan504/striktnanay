@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 import '../services/focus_mode_service.dart';
 import 'whitelist_screen.dart';
 import 'add_task_screen.dart';
+import 'task_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,12 +17,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final StorageService _storageService = StorageService();
   final FocusModeService _focusModeService = FocusModeService();
   List<Task> _tasks = [];
+  List<Task> _filteredTasks = [];
   bool _focusModeEnabled = false;
   bool _isLoading = true;
+  String? _selectedCategory;
 
   @override
   void initState() {
     super.initState();
+    _filteredTasks = [];
     _loadData();
   }
 
@@ -31,8 +35,24 @@ class _HomeScreenState extends State<HomeScreen> {
     final focusMode = await _storageService.getFocusModeEnabled();
     setState(() {
       _tasks = tasks;
+      _filterTasks();
       _focusModeEnabled = focusMode;
       _isLoading = false;
+    });
+  }
+
+  void _filterTasks() {
+    if (_selectedCategory == null) {
+      _filteredTasks = _tasks;
+    } else {
+      _filteredTasks = _tasks.where((task) => task.category == _selectedCategory).toList();
+    }
+  }
+
+  void _onCategorySelected(String? category) {
+    setState(() {
+      _selectedCategory = _selectedCategory == category ? null : category;
+      _filterTasks();
     });
   }
 
@@ -45,23 +65,51 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result != null) {
       _tasks.add(result);
       await _storageService.saveTasks(_tasks);
+      _filterTasks();
       setState(() {});
     }
   }
 
-  Future<void> _toggleTask(Task task) async {
-    final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
-    final index = _tasks.indexWhere((t) => t.id == task.id);
-    if (index != -1) {
-      _tasks[index] = updatedTask;
-      await _storageService.saveTasks(_tasks);
-      setState(() {});
+  Future<void> _openTaskDetail(Task task) async {
+    final updatedTask = await Navigator.push<Task>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TaskDetailScreen(
+          task: task,
+          onTaskUpdated: (updatedTask) {
+            final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+            if (index != -1) {
+              _tasks[index] = updatedTask;
+              _storageService.saveTasks(_tasks);
+              _filterTasks();
+              setState(() {});
+            }
+          },
+          onTaskDeleted: (taskId) {
+            _tasks.removeWhere((t) => t.id == taskId);
+            _storageService.saveTasks(_tasks);
+            _filterTasks();
+            setState(() {});
+          },
+        ),
+      ),
+    );
+
+    if (updatedTask != null) {
+      final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+      if (index != -1) {
+        _tasks[index] = updatedTask;
+        await _storageService.saveTasks(_tasks);
+        _filterTasks();
+        setState(() {});
+      }
     }
   }
 
   Future<void> _deleteTask(Task task) async {
     _tasks.removeWhere((t) => t.id == task.id);
     await _storageService.saveTasks(_tasks);
+    _filterTasks();
     setState(() {});
   }
 
@@ -115,15 +163,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           // Status Cards
                           _buildStatusCards(),
                           
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 32),
+                          
+                          // Categories Section
+                          _buildCategoriesSection(),
+                          
+                          const SizedBox(height: 32),
                           
                           // Focus Mode Switch
                           _buildFocusModeSwitch(),
                           
                           const SizedBox(height: 24),
                           
-                          // Tasks List
-                          _buildTasksList(),
+                          // Progress Section (Tasks)
+                          _buildProgressSection(),
                           
                           const SizedBox(height: 100),
                         ],
@@ -143,18 +196,18 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
-          // Logo/Icon
+          // Profile Icon (Nanay)
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF0D7377),
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
               Icons.person,
-              color: Colors.white,
-              size: 24,
+              color: Color(0xFF0D7377),
+              size: 32,
             ),
           ),
           const SizedBox(width: 12),
@@ -170,6 +223,27 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           
           const Spacer(),
+          
+          // Search Bar
+          GestureDetector(
+            onTap: () {
+              // TODO: Implement search functionality
+            },
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.search,
+                color: Colors.grey,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
           
           // Whitelist Button
           IconButton(
@@ -204,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _buildStatusCard(
             title: 'Galit si Nanay!',
             subtitle: '$_pendingTasksCount Tasks are Pending',
-            icon: Icons.mood_bad,
+            isAngry: true,
           ),
         ),
         const SizedBox(width: 16),
@@ -212,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _buildStatusCard(
             title: 'Happy na si Nanay!',
             subtitle: '$_completedTasksCount Tasks are Complete',
-            icon: Icons.mood,
+            isAngry: false,
           ),
         ),
       ],
@@ -222,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildStatusCard({
     required String title,
     required String subtitle,
-    required IconData icon,
+    required bool isAngry,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -237,7 +311,29 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white, size: 32),
+          // Nanay Icon with expression
+          Row(
+            children: [
+              const Icon(
+                Icons.person,
+                color: Colors.white,
+                size: 32,
+              ),
+              const SizedBox(width: 4),
+              if (isAngry)
+                const Icon(
+                  Icons.mood_bad,
+                  color: Colors.white,
+                  size: 20,
+                )
+              else
+                const Icon(
+                  Icons.star,
+                  color: Colors.white,
+                  size: 20,
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           Text(
             title,
@@ -256,6 +352,67 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoriesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Categories',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF333333),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildCategoryButton('Studying'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildCategoryButton('Chores'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildCategoryButton('Work'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryButton(String label) {
+    final isSelected = _selectedCategory == label;
+    return GestureDetector(
+      onTap: () => _onCategorySelected(label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? const Color(0xFF0D7377) 
+              : const Color(0xFF14A085),
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected
+              ? Border.all(color: const Color(0xFF0D7377), width: 2)
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -295,15 +452,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTasksList() {
-    if (_tasks.isEmpty) {
-      return const Center(
+  Widget _buildProgressSection() {
+    if (_filteredTasks.isEmpty) {
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32.0),
+          padding: const EdgeInsets.all(32.0),
           child: Text(
-            'No tasks yet. Tap the + button to add one!',
+            _selectedCategory != null
+                ? 'No tasks in $_selectedCategory category.\nTap a category to filter or add a task!'
+                : 'No tasks yet. Tap the + button to add one!',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.grey,
               fontSize: 16,
             ),
@@ -316,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Tasks',
+          'Progress',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -324,72 +483,122 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        ..._tasks.map((task) => _buildTaskItem(task)),
+        ..._filteredTasks.map((task) => _buildTaskCard(task)),
       ],
     );
   }
 
-  Widget _buildTaskItem(Task task) {
-    return Dismissible(
-      key: Key(task.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+  Widget _buildTaskCard(Task task) {
+    // Use the task's progress percentage getter
+    final progress = task.progressPercentage;
+    
+    // Determine card color
+    Color cardColor;
+    Color textColor;
+    if (task.color != null && task.color!.isNotEmpty) {
+      try {
+        cardColor = Color(int.parse(task.color!.replaceFirst('#', '0xFF')));
+        textColor = _getContrastColor(cardColor);
+      } catch (e) {
+        cardColor = task.isCompleted 
+            ? const Color(0xFF9B59B6) // Purple for completed
+            : const Color(0xFF5DADE2); // Light blue for incomplete
+        textColor = task.isCompleted ? Colors.white : const Color(0xFF333333);
+      }
+    } else {
+      cardColor = task.isCompleted 
+          ? const Color(0xFF9B59B6) // Purple for completed
+          : const Color(0xFF5DADE2); // Light blue for incomplete
+      textColor = task.isCompleted ? Colors.white : const Color(0xFF333333);
+    }
+
+    return GestureDetector(
+      onTap: () => _openTaskDetail(task),
+      onLongPress: () {
+        _deleteTask(task);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task deleted')),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: cardColor,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(
-          Icons.delete,
-          color: Colors.white,
-        ),
-      ),
-      onDismissed: (_) => _deleteTask(task),
-      child: GestureDetector(
-        onLongPress: () {
-          _deleteTask(task);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task deleted')),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: task.isCompleted
-                ? Colors.grey[200]
-                : const Color(0xFF5DADE2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Checkbox(
-                value: task.isCompleted,
-                onChanged: (_) => _toggleTask(task),
-                activeColor: const Color(0xFF0D7377),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.name,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (task.dueDate != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'DUE ${_formatDate(task.dueDate!)}',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  task.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: task.isCompleted
-                        ? Colors.grey[600]
-                        : const Color(0xFF333333),
-                    decoration: task.isCompleted
-                        ? TextDecoration.lineThrough
-                        : null,
+            ),
+            const SizedBox(width: 12),
+            // Progress Indicator
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: CircularProgressIndicator(
+                    value: progress / 100,
+                    strokeWidth: 4,
+                    backgroundColor: textColor.withOpacity(0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(textColor),
                   ),
                 ),
-              ),
-            ],
-          ),
+                Text(
+                  '$progress%',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: textColor,
+              size: 16,
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Color _getContrastColor(Color color) {
+    // Calculate luminance to determine if we should use white or black text
+    final luminance = color.computeLuminance();
+    return luminance > 0.5 ? const Color(0xFF333333) : Colors.white;
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}';
   }
 
   Widget _buildFloatingActionButton() {
@@ -417,7 +626,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: _addTask,
           borderRadius: BorderRadius.circular(12),
           child: const Icon(
-            Icons.add,
+            Icons.add_task,
             color: Colors.white,
             size: 28,
           ),

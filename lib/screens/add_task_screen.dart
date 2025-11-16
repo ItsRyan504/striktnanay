@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import '../models/subtask.dart';
 
 class AddTaskScreen extends StatefulWidget {
   const AddTaskScreen({super.key});
@@ -192,11 +193,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
 
     // Collect non-empty subtasks
-    final validSubtasks = <String>[];
+    final validSubtasks = <Subtask>[];
     for (int i = 0; i < _subtaskControllers.length; i++) {
       final text = _subtaskControllers[i].text.trim();
       if (text.isNotEmpty) {
-        validSubtasks.add(text);
+        validSubtasks.add(Subtask(
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_$i',
+          name: text,
+        ));
       }
     }
 

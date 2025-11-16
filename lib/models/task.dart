@@ -1,7 +1,9 @@
+import 'subtask.dart';
+
 class Task {
   final String id;
   final String name;
-  final List<String> subtasks;
+  final List<Subtask> subtasks;
   final bool isCompleted;
   final DateTime? startDate;
   final DateTime? dueDate;
@@ -24,7 +26,7 @@ class Task {
   Task copyWith({
     String? id,
     String? name,
-    List<String>? subtasks,
+    List<Subtask>? subtasks,
     bool? isCompleted,
     DateTime? startDate,
     DateTime? dueDate,
@@ -45,11 +47,19 @@ class Task {
     );
   }
 
+  int get progressPercentage {
+    if (subtasks.isEmpty) {
+      return isCompleted ? 100 : 0;
+    }
+    final completedCount = subtasks.where((s) => s.isCompleted).length;
+    return ((completedCount / subtasks.length) * 100).round();
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
-      'subtasks': subtasks,
+      'subtasks': subtasks.map((s) => s.toJson()).toList(),
       'isCompleted': isCompleted,
       'startDate': startDate?.toIso8601String(),
       'dueDate': dueDate?.toIso8601String(),
@@ -60,13 +70,27 @@ class Task {
   }
 
   factory Task.fromJson(Map<String, dynamic> json) {
-    // Safely parse subtasks
-    List<String> subtasksList = [];
+    // Safely parse subtasks - handle both old format (List<String>) and new format (List<Subtask>)
+    List<Subtask> subtasksList = [];
     if (json['subtasks'] != null) {
       if (json['subtasks'] is List) {
-        subtasksList = List<String>.from(
-          (json['subtasks'] as List).map((e) => e.toString()),
-        );
+        final subtasksData = json['subtasks'] as List;
+        for (var item in subtasksData) {
+          if (item is Map<String, dynamic>) {
+            // New format: Subtask object
+            try {
+              subtasksList.add(Subtask.fromJson(item));
+            } catch (e) {
+              // Skip invalid subtask entries
+            }
+          } else if (item is String) {
+            // Legacy support: if subtask is just a string, convert it to Subtask
+            subtasksList.add(Subtask(
+              id: '${DateTime.now().millisecondsSinceEpoch}_${subtasksList.length}',
+              name: item,
+            ));
+          }
+        }
       }
     }
 

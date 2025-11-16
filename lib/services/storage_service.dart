@@ -18,22 +18,41 @@ class StorageService {
       if (decoded is! List) return [];
       
       final List<dynamic> tasksList = decoded;
-      return tasksList
-          .map((json) {
-            try {
-              if (json is Map<String, dynamic>) {
-                return Task.fromJson(json);
+      final List<Task> validTasks = [];
+      
+      for (var json in tasksList) {
+        try {
+          if (json is Map<String, dynamic>) {
+            // Create a copy of the json map to avoid modifying the original
+            final taskJson = Map<String, dynamic>.from(json);
+            
+            // Ensure subtasks are properly converted from old format (List<String>) to new format (List<Subtask>)
+            if (taskJson['subtasks'] != null && taskJson['subtasks'] is List) {
+              final subtasks = taskJson['subtasks'] as List;
+              // Convert old String subtasks to Subtask format
+              if (subtasks.isNotEmpty && subtasks.first is String) {
+                final timestamp = DateTime.now().millisecondsSinceEpoch;
+                taskJson['subtasks'] = subtasks.asMap().entries.map((entry) {
+                  return {
+                    'id': '${timestamp}_${entry.key}',
+                    'name': entry.value.toString(),
+                    'isCompleted': false,
+                  };
+                }).toList();
               }
-              return null;
-            } catch (e) {
-              // Skip invalid task entries
-              return null;
             }
-          })
-          .whereType<Task>()
-          .toList();
+            validTasks.add(Task.fromJson(taskJson));
+          }
+        } catch (e) {
+          // Skip invalid task entries, but log for debugging
+          print('Error parsing task: $e');
+        }
+      }
+      
+      return validTasks;
     } catch (e) {
       // If there's an error reading tasks, return empty list
+      print('Error loading tasks: $e');
       return [];
     }
   }
