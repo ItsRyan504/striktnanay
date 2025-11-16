@@ -42,7 +42,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _saveTask() async {
+  Future<void> _saveTask({bool shouldPop = false}) async {
     if (_isEditingTask) {
       setState(() {
         _task = _task.copyWith(name: _taskNameController.text.trim());
@@ -57,7 +57,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       await _storageService.saveTasks(tasks);
       widget.onTaskUpdated(_task);
     }
-    if (mounted && !_isEditingSubtask) {
+    
+    // Only pop if explicitly requested (e.g., from check button when not editing)
+    if (shouldPop && mounted) {
       Navigator.pop(context);
     }
   }
@@ -140,7 +142,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
 
     _subtaskController.clear();
-    _saveTask();
+    _saveTask(shouldPop: false); // Save but don't pop
   }
 
   void _startEditingSubtask(Subtask subtask) {
@@ -176,7 +178,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         _task = _task.copyWith(isCompleted: true);
       }
     });
-    _saveTask();
+    _saveTask(shouldPop: false); // Save but don't pop
   }
 
   void _deleteSubtask(Subtask subtask) {
@@ -185,7 +187,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         subtasks: _task.subtasks.where((s) => s.id != subtask.id).toList(),
       );
     });
-    _saveTask();
+    _saveTask(shouldPop: false); // Save but don't pop
   }
 
   Color _getTaskColor() {
@@ -246,7 +248,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ),
           IconButton(
             icon: Icon(_isEditingTask ? Icons.check : Icons.edit, color: Colors.white),
-            onPressed: _isEditingTask ? _saveTask : _startEditingTask,
+            onPressed: _isEditingTask 
+                ? () => _saveTask(shouldPop: false) // Save but stay on screen
+                : _startEditingTask,
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),

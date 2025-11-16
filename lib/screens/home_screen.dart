@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
-import '../services/focus_mode_service.dart';
 import 'whitelist_screen.dart';
 import 'add_task_screen.dart';
 import 'task_detail_screen.dart';
@@ -13,12 +12,12 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final StorageService _storageService = StorageService();
-  final FocusModeService _focusModeService = FocusModeService();
   List<Task> _tasks = [];
   List<Task> _filteredTasks = [];
-  bool _focusModeEnabled = false;
   bool _isLoading = true;
   String? _selectedCategory;
 
@@ -27,16 +26,29 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _filteredTasks = [];
     _loadData();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reload data when app comes back to foreground
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final tasks = await _storageService.getTasks();
-    final focusMode = await _storageService.getFocusModeEnabled();
     setState(() {
       _tasks = tasks;
       _filterTasks();
-      _focusModeEnabled = focusMode;
       _isLoading = false;
     });
   }
@@ -113,16 +125,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  Future<void> _toggleFocusMode(bool value) async {
-    setState(() => _focusModeEnabled = value);
-    await _storageService.setFocusModeEnabled(value);
-
-    if (value) {
-      await _focusModeService.startMonitoring(context, _tasks);
-    } else {
-      await _focusModeService.stopMonitoring();
-    }
-  }
 
   void _openWhitelist() {
     Navigator.push(
@@ -134,8 +136,13 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _pendingTasksCount => _tasks.where((t) => !t.isCompleted).length;
   int get _completedTasksCount => _tasks.where((t) => t.isCompleted).length;
 
+  void refresh() {
+    _loadData();
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -168,12 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           // Categories Section
                           _buildCategoriesSection(),
                           
-                          const SizedBox(height: 32),
-                          
-                          // Focus Mode Switch
-                          _buildFocusModeSwitch(),
-                          
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
                           
                           // Progress Section (Tasks)
                           _buildProgressSection(),
@@ -413,41 +415,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFocusModeSwitch() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.timer,
-            color: Color(0xFF0D7377),
-            size: 24,
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Focus Mode',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-          ),
-          Switch(
-            value: _focusModeEnabled,
-            onChanged: _toggleFocusMode,
-            activeColor: const Color(0xFF0D7377),
-          ),
-        ],
       ),
     );
   }
