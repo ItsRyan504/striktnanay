@@ -9,12 +9,33 @@ class StorageService {
 
   // Tasks
   Future<List<Task>> getTasks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final tasksJson = prefs.getString(_tasksKey);
-    if (tasksJson == null) return [];
-    
-    final List<dynamic> decoded = jsonDecode(tasksJson);
-    return decoded.map((json) => Task.fromJson(json)).toList();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tasksJson = prefs.getString(_tasksKey);
+      if (tasksJson == null) return [];
+      
+      final decoded = jsonDecode(tasksJson);
+      if (decoded is! List) return [];
+      
+      final List<dynamic> tasksList = decoded;
+      return tasksList
+          .map((json) {
+            try {
+              if (json is Map<String, dynamic>) {
+                return Task.fromJson(json);
+              }
+              return null;
+            } catch (e) {
+              // Skip invalid task entries
+              return null;
+            }
+          })
+          .whereType<Task>()
+          .toList();
+    } catch (e) {
+      // If there's an error reading tasks, return empty list
+      return [];
+    }
   }
 
   Future<void> saveTasks(List<Task> tasks) async {
@@ -25,12 +46,26 @@ class StorageService {
 
   // Whitelist
   Future<Map<String, bool>> getWhitelist() async {
-    final prefs = await SharedPreferences.getInstance();
-    final whitelistJson = prefs.getString(_whitelistKey);
-    if (whitelistJson == null) return {};
-    
-    final Map<String, dynamic> decoded = jsonDecode(whitelistJson);
-    return decoded.map((key, value) => MapEntry(key, value as bool));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final whitelistJson = prefs.getString(_whitelistKey);
+      if (whitelistJson == null) return {};
+      
+      final decoded = jsonDecode(whitelistJson);
+      if (decoded is! Map) return {};
+      
+      final Map<String, dynamic> whitelistMap = decoded.cast<String, dynamic>();
+      return whitelistMap.map((key, value) {
+        if (value is bool) {
+          return MapEntry(key, value);
+        }
+        // If value is not bool, default to false
+        return MapEntry(key, false);
+      });
+    } catch (e) {
+      // If there's an error reading whitelist, return empty map
+      return {};
+    }
   }
 
   Future<void> saveWhitelist(Map<String, bool> whitelist) async {

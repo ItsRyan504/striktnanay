@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
 import '../services/focus_mode_service.dart';
-import '../widgets/add_task_dialog.dart';
 import 'whitelist_screen.dart';
+import 'add_task_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,17 +37,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addTask() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => const AddTaskDialog(),
+    final result = await Navigator.push<Task>(
+      context,
+      MaterialPageRoute(builder: (context) => const AddTaskScreen()),
     );
 
-    if (result != null && result.isNotEmpty) {
-      final newTask = Task(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: result,
-      );
-      _tasks.add(newTask);
+    if (result != null) {
+      _tasks.add(result);
       await _storageService.saveTasks(_tasks);
       setState(() {});
     }
@@ -139,7 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: _buildFloatingActionButton(),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -431,57 +426,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      height: 70,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D7377),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(Icons.home, true),
-          _buildNavItem(Icons.calendar_today, false),
-          _buildNavItem(Icons.timer, false, isCenter: true),
-          _buildNavItem(Icons.checklist, false),
-          _buildNavItem(Icons.person, false),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, bool isActive, {bool isCenter = false}) {
-    if (isCenter) {
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          color: const Color(0xFF0D7377),
-          size: 28,
-        ),
-      );
-    }
-    
-    return Icon(
-      icon,
-      color: Colors.white,
-      size: 24,
-    );
-  }
 }
