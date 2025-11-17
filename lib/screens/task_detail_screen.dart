@@ -27,12 +27,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   bool _isEditingTask = false;
   bool _isEditingSubtask = false;
   Subtask? _editingSubtask;
+  int _lastProgress = 0;
+  bool _showCelebration = false;
 
   @override
   void initState() {
     super.initState();
     _task = widget.task;
     _taskNameController.text = _task.name;
+    _lastProgress = _task.progressPercentage;
   }
 
   @override
@@ -178,6 +181,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         _task = _task.copyWith(isCompleted: true);
       }
     });
+    _handleProgressChange();
     _saveTask(shouldPop: false); // Save but don't pop
   }
 
@@ -187,6 +191,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         subtasks: _task.subtasks.where((s) => s.id != subtask.id).toList(),
       );
     });
+    _handleProgressChange();
     _saveTask(shouldPop: false); // Save but don't pop
   }
 
@@ -246,6 +251,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               icon: const Icon(Icons.close, color: Colors.white),
               onPressed: _cancelEditingTask,
             ),
+          IconButton(
+            icon: const Icon(Icons.color_lens, color: Colors.white),
+            tooltip: 'Change color',
+            onPressed: _showColorPicker,
+          ),
           IconButton(
             icon: Icon(_isEditingTask ? Icons.check : Icons.edit, color: Colors.white),
             onPressed: _isEditingTask 
@@ -338,6 +348,17 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: taskColor,
+                        ),
+                      ),
+                      IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: _showCelebration ? 1 : 0,
+                          duration: const Duration(milliseconds: 300),
+                          child: Icon(
+                            Icons.check_circle,
+                            color: taskColor.withOpacity(0.9),
+                            size: 92,
+                          ),
                         ),
                       ),
                     ],
@@ -494,6 +515,71 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _handleProgressChange() {
+    final current = _task.progressPercentage;
+    if (current == 100 && _lastProgress < 100) {
+      setState(() {
+        _showCelebration = true;
+      });
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          setState(() {
+            _showCelebration = false;
+          });
+        }
+      });
+    }
+    _lastProgress = current;
+  }
+
+  void _showColorPicker() {
+    final colors = [
+      const Color(0xFF14A085), // Teal
+      const Color(0xFF9B59B6), // Purple
+      const Color(0xFF5DADE2), // Light Blue
+      const Color(0xFFE74C3C), // Red
+      const Color(0xFFF39C12), // Orange
+      const Color(0xFF2ECC71), // Green
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Color'),
+        content: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: colors.map((color) {
+            return GestureDetector(
+              onTap: () async {
+                final hex = '#${color.value.toRadixString(16).substring(2)}';
+                setState(() {
+                  _task = _task.copyWith(color: hex);
+                });
+                Navigator.pop(context);
+                await _saveTask(shouldPop: false);
+              },
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _getTaskColor() == color
+                        ? Colors.black
+                        : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );

@@ -4,7 +4,7 @@ enum NavItem {
   home,
   calendar,
   timer,
-  checklist,
+  whitelist,
   profile,
 }
 
@@ -41,18 +41,16 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.calendar_today,
             isActive: currentItem == NavItem.calendar,
             onTap: () => onTap(NavItem.calendar),
-            showDate: true,
           ),
           _buildNavButton(
             icon: Icons.timer,
             isActive: currentItem == NavItem.timer,
             onTap: () => onTap(NavItem.timer),
-            isCenter: true,
           ),
           _buildNavButton(
             icon: Icons.checklist,
-            isActive: currentItem == NavItem.checklist,
-            onTap: () => onTap(NavItem.checklist),
+            isActive: currentItem == NavItem.whitelist,
+            onTap: () => onTap(NavItem.whitelist),
           ),
           _buildNavButton(
             icon: Icons.person,
@@ -68,43 +66,7 @@ class BottomNavBar extends StatelessWidget {
     required IconData icon,
     required bool isActive,
     required VoidCallback onTap,
-    bool isCenter = false,
-    bool showDate = false,
   }) {
-    if (isCenter) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            onTap();
-          },
-          borderRadius: BorderRadius.circular(28),
-          splashColor: Colors.white.withOpacity(0.3),
-          highlightColor: Colors.white.withOpacity(0.1),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(
-              icon,
-              color: const Color(0xFF0D7377),
-              size: 28,
-            ),
-          ),
-        ),
-      );
-    }
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -126,18 +88,6 @@ class BottomNavBar extends StatelessWidget {
                 color: isActive ? Colors.white : Colors.white70,
                 size: 24,
               ),
-              if (showDate)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '31',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isActive ? Colors.white : Colors.white70,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

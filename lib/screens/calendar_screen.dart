@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../models/subtask.dart';
 import '../services/storage_service.dart';
+import '../services/task_sync.dart';
 import 'task_detail_screen.dart';
 import 'whitelist_screen.dart';
 
@@ -33,13 +34,18 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
     super.initState();
     _loadTasks();
     _searchController.addListener(_onSearchChanged);
+    _syncListener = () { _loadTasks(); };
+    TaskSync.instance.version.addListener(_syncListener);
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    TaskSync.instance.version.removeListener(_syncListener);
     super.dispose();
   }
+
+  late VoidCallback _syncListener;
 
   void _onSearchChanged() {
     _filterTasks();

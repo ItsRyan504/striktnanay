@@ -11,7 +11,7 @@ class ChecklistScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Checklist',
+          'Whitelist',
           style: TextStyle(
             color: Color(0xFF333333),
             fontWeight: FontWeight.bold,
@@ -20,7 +20,7 @@ class ChecklistScreen extends StatelessWidget {
       ),
       body: const Center(
         child: Text(
-          'Checklist Screen\nComing Soon',
+          'Whitelist Screen\nComing Soon',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.grey,

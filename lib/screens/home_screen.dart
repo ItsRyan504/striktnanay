@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
+import '../services/task_sync.dart';
 import 'whitelist_screen.dart';
 import 'add_task_screen.dart';
 import 'task_detail_screen.dart';
@@ -20,20 +21,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   List<Task> _filteredTasks = [];
   bool _isLoading = true;
   String? _selectedCategory;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _filteredTasks = [];
     _loadData();
+    _syncListener = () { _loadData(); };
+    TaskSync.instance.version.addListener(_syncListener);
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    TaskSync.instance.version.removeListener(_syncListener);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
+
+  late VoidCallback _syncListener;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -54,11 +61,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   }
 
   void _filterTasks() {
-    if (_selectedCategory == null) {
-      _filteredTasks = _tasks;
-    } else {
-      _filteredTasks = _tasks.where((task) => task.category == _selectedCategory).toList();
+    Iterable<Task> list = _tasks;
+    if (_selectedCategory != null) {
+      list = list.where((task) => task.category == _selectedCategory);
     }
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      list = list.where((t) => t.name.toLowerCase().contains(q));
+    }
+    _filteredTasks = list.toList();
   }
 
   void _onCategorySelected(String? category) {
@@ -131,6 +142,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
       context,
       MaterialPageRoute(builder: (context) => const WhitelistScreen()),
     ).then((_) => _loadData());
+  }
+
+  Future<void> _startSearch() async {
+    final selected = await showSearch<Task?>(
+      context: context,
+      delegate: _TaskSearchDelegate(tasks: _tasks),
+    );
+    if (selected != null) {
+      _openTaskDetail(selected);
+    }
   }
 
   int get _pendingTasksCount => _tasks.where((t) => !t.isCompleted).length;
@@ -228,9 +249,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
           
           // Search Bar
           GestureDetector(
-            onTap: () {
-              // TODO: Implement search functionality
-            },
+            onTap: _startSearch,
             child: Container(
               width: 40,
               height: 40,
@@ -602,4 +621,70 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
     );
   }
 
+}
+
+class _TaskSearchDelegate extends SearchDelegate<Task?> {
+  _TaskSearchDelegate({required this.tasks});
+  final List<Task> tasks;
+
+  @override
+  String get searchFieldLabel => 'Search tasks';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () => query = '',
+        ),
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  Iterable<Task> _filter() {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return tasks;
+    return tasks.where((t) => t.name.toLowerCase().contains(q));
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    final results = _filter().toList();
+    return _buildList(context, results);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    final results = _filter().toList();
+    return _buildList(context, results);
+  }
+
+  Widget _buildList(BuildContext context, List<Task> results) {
+    if (results.isEmpty) {
+      return const Center(
+        child: Text('No matching tasks'),
+      );
+    }
+    return ListView.separated(
+      itemCount: results.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final t = results[index];
+        return ListTile(
+          title: Text(t.name),
+          subtitle: t.category != null ? Text(t.category!) : null,
+          leading: const Icon(Icons.task_alt),
+          onTap: () => close(context, t),
+        );
+      },
+    );
+  }
 }

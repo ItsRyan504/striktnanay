@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task.dart';
+import 'task_sync.dart';
 
 class StorageService {
   static const String _tasksKey = 'tasks';
@@ -61,6 +62,8 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final tasksJson = jsonEncode(tasks.map((task) => task.toJson()).toList());
     await prefs.setString(_tasksKey, tasksJson);
+    // Notify listeners that tasks changed
+    TaskSync.instance.notifyChanged();
   }
 
   // Whitelist

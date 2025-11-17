@@ -97,10 +97,7 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF0D7377)),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Whitelist',
           style: TextStyle(
@@ -109,7 +106,7 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
           ),
         ),
       ),
-      body: _isLoading
+        body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -147,23 +144,6 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
                   ),
                 ),
                 
-                // Whitelist title
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Whitelist',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF333333),
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
                 
                 // Apps list
                 Expanded(
@@ -185,6 +165,12 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
                 ),
               ],
             ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF0D7377),
+        onPressed: _loadApps,
+        child: const Icon(Icons.playlist_add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -196,6 +182,13 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -249,7 +242,10 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
           Switch(
             value: app.isWhitelisted,
             onChanged: (_) => _toggleWhitelist(app),
-            activeColor: const Color(0xFF0D7377),
+            activeColor: Colors.white,
+            activeTrackColor: const Color(0xFF00C853),
+            inactiveThumbColor: Colors.white,
+            inactiveTrackColor: const Color(0xFFE0E0E0),
           ),
         ],
       ),

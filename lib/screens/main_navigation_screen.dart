@@ -3,7 +3,7 @@ import '../widgets/bottom_nav_bar.dart';
 import 'home_screen.dart';
 import 'calendar_screen.dart';
 import 'timer_screen.dart';
-import 'checklist_screen.dart';
+import 'whitelist_screen.dart';
 import 'profile_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -21,7 +21,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const HomeScreen(),
     const CalendarScreen(),
     const TimerScreen(),
-    const ChecklistScreen(),
+    const WhitelistScreen(),
     const ProfileScreen(),
   ];
 
