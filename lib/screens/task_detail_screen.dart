@@ -132,14 +132,17 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     } else {
       // Add new subtask
       setState(() {
+        final newList = [
+          ..._task.subtasks,
+          Subtask(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: _subtaskController.text.trim(),
+          ),
+        ];
         _task = _task.copyWith(
-          subtasks: [
-            ..._task.subtasks,
-            Subtask(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              name: _subtaskController.text.trim(),
-            ),
-          ],
+          subtasks: newList,
+          // Adding a subtask means progress < 100 until all are done
+          isCompleted: false,
         );
       });
     }
@@ -173,13 +176,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         return s;
       }).toList();
 
-      _task = _task.copyWith(subtasks: updatedSubtasks);
+      final allCompleted =
+          updatedSubtasks.isNotEmpty && updatedSubtasks.every((s) => s.isCompleted);
 
-      // Auto-complete task if all subtasks are done
-      if (updatedSubtasks.isNotEmpty &&
-          updatedSubtasks.every((s) => s.isCompleted)) {
-        _task = _task.copyWith(isCompleted: true);
-      }
+      _task = _task.copyWith(
+        subtasks: updatedSubtasks,
+        // Keep isCompleted in sync with progress (both directions)
+        isCompleted: allCompleted,
+      );
     });
     _handleProgressChange();
     _saveTask(shouldPop: false); // Save but don't pop
@@ -187,8 +191,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   void _deleteSubtask(Subtask subtask) {
     setState(() {
+      final remaining = _task.subtasks.where((s) => s.id != subtask.id).toList();
+      final allCompleted =
+          remaining.isNotEmpty && remaining.every((s) => s.isCompleted);
       _task = _task.copyWith(
-        subtasks: _task.subtasks.where((s) => s.id != subtask.id).toList(),
+        subtasks: remaining,
+        isCompleted: allCompleted,
       );
     });
     _handleProgressChange();

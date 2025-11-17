@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
 import '../services/task_sync.dart';
-import 'whitelist_screen.dart';
 import 'add_task_screen.dart';
 import 'task_detail_screen.dart';
 
@@ -137,12 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   }
 
 
-  void _openWhitelist() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const WhitelistScreen()),
-    ).then((_) => _loadData());
-  }
+  // Removed Whitelist navigation from Home header
 
   Future<void> _startSearch() async {
     final selected = await showSearch<Task?>(
@@ -265,15 +259,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
             ),
           ),
           const SizedBox(width: 12),
-          
-          // Whitelist Button
-          IconButton(
-            onPressed: _openWhitelist,
-            icon: const Icon(
-              Icons.shield,
-              color: Color(0xFF0D7377),
-            ),
-          ),
         ],
       ),
     );

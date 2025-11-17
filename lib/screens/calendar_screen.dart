@@ -4,7 +4,6 @@ import '../models/subtask.dart';
 import '../services/storage_service.dart';
 import '../services/task_sync.dart';
 import 'task_detail_screen.dart';
-import 'whitelist_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -102,13 +101,13 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
       return s;
     }).toList();
 
-    // Auto-complete task if all subtasks are done
-    final allCompleted = updatedSubtasks.isNotEmpty &&
-        updatedSubtasks.every((s) => s.isCompleted);
-    
+    // Keep isCompleted in sync with progress (both directions)
+    final allCompleted =
+        updatedSubtasks.isNotEmpty && updatedSubtasks.every((s) => s.isCompleted);
+
     final updatedTask = task.copyWith(
       subtasks: updatedSubtasks,
-      isCompleted: allCompleted ? true : task.isCompleted,
+      isCompleted: allCompleted,
     );
 
     final tasks = await _storageService.getTasks();
@@ -116,18 +115,15 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
     if (index != -1) {
       tasks[index] = updatedTask;
       await _storageService.saveTasks(tasks);
+      // Ensure other screens (like Home) update immediately
+      TaskSync.instance.notifyChanged();
       // Reload tasks to sync with home screen
       await _loadTasks();
       setState(() {}); // Update UI immediately
     }
   }
 
-  void _openWhitelist() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const WhitelistScreen()),
-    );
-  }
+  // Removed Whitelist navigation from Calendar header
 
   void _previousMonth() {
     setState(() {
@@ -328,14 +324,6 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
             ),
           ),
           const SizedBox(width: 12),
-          // Whitelist Button
-          IconButton(
-            onPressed: _openWhitelist,
-            icon: const Icon(
-              Icons.shield,
-              color: Color(0xFF0D7377),
-            ),
-          ),
         ],
       ),
     );

@@ -165,12 +165,7 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF0D7377),
-        onPressed: _loadApps,
-        child: const Icon(Icons.playlist_add),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      // Removed bottom-right FAB per request
     );
   }
 
