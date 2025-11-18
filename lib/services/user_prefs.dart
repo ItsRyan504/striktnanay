@@ -42,12 +42,19 @@ class UserPrefs {
 
   Future<bool> getAutoContinue() async {
     final sp = await SharedPreferences.getInstance();
-    return sp.getBool(_kAutoContinue) ?? true;
+    final val = sp.getBool(_kAutoContinue) ?? true;
+    if (_autoContinueNotifier.value != val) {
+      _autoContinueNotifier.value = val;
+    }
+    return val;
   }
 
   Future<void> setAutoContinue(bool value) async {
     final sp = await SharedPreferences.getInstance();
     await sp.setBool(_kAutoContinue, value);
+    if (_autoContinueNotifier.value != value) {
+      _autoContinueNotifier.value = value;
+    }
   }
 }
 
@@ -55,3 +62,7 @@ class UserPrefs {
 final ValueNotifier<String> _userNameNotifier = ValueNotifier<String>('User');
 
 ValueListenable<String> get userNameListenable => _userNameNotifier;
+
+final ValueNotifier<bool> _autoContinueNotifier = ValueNotifier<bool>(true);
+
+ValueListenable<bool> get autoContinueListenable => _autoContinueNotifier;

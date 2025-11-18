@@ -1,8 +1,7 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/user_prefs.dart';
-import '../services/ringtone_service.dart';
-import '../services/notification_prefs.dart';
+// Removed ringtone & notification prefs imports (alarm sound disabled)
 import 'about_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -18,12 +17,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _break = 5;
   bool _autoContinue = true;
   bool _loading = true;
-  String? _toneSummary;
+  VoidCallback? _autoContinueListener;
 
   @override
   void initState() {
     super.initState();
+    _autoContinueListener = () {
+      final prefValue = autoContinueListenable.value;
+      if (mounted && _autoContinue != prefValue) {
+        setState(() => _autoContinue = prefValue);
+      }
+    };
+    autoContinueListenable.addListener(_autoContinueListener!);
     _load();
+  }
+
+  @override
+  void dispose() {
+    if (_autoContinueListener != null) {
+      autoContinueListenable.removeListener(_autoContinueListener!);
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -32,13 +46,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final w = await prefs.getDefaultWorkMinutes();
     final b = await prefs.getDefaultBreakMinutes();
     final ac = await prefs.getAutoContinue();
-    final uri = await NotificationPrefs().getAndroidRingtoneUri();
+    // Alarm sound disabled; skip loading ringtone.
     setState(() {
       _name = name;
       _work = w;
       _break = b;
       _autoContinue = ac;
-      _toneSummary = uri == null || uri.isEmpty ? 'Default alarm' : uri;
       _loading = false;
     });
   }
@@ -96,14 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Defaults saved')));
   }
 
-  Future<void> _pickAlarm() async {
-    if (!Platform.isAndroid) return;
-    final picker = RingtoneService();
-    final uri = await picker.pickAndroidAlarmRingtone();
-    if (uri == null) return;
-    await NotificationPrefs().setAndroidRingtoneUri(uri);
-    setState(() => _toneSummary = uri);
-  }
+  // Alarm picking removed.
 
   @override
   Widget build(BuildContext context) {
@@ -127,15 +133,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 0),
 
-          _header('Notifications'),
-          ListTile(
-            leading: const Icon(Icons.music_note),
-            title: const Text('Alarm sound (Android)'),
-            subtitle: Text(_toneSummary ?? 'Default alarm'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _pickAlarm,
-          ),
-
           _header('Timer'),
           ListTile(
             leading: const Icon(Icons.work_history),
@@ -158,7 +155,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Auto-continue to next phase'),
             value: _autoContinue,
             onChanged: (v) async {
-              setState(() => _autoContinue = v);
               await UserPrefs().setAutoContinue(v);
             },
           ),

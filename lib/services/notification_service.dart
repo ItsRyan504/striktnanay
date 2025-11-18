@@ -3,7 +3,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'notification_prefs.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -12,7 +11,7 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
-  final NotificationPrefs _prefs = NotificationPrefs();
+  // final NotificationPrefs _prefs = NotificationPrefs(); // not used when alerts are silent
   static const int _statusId = 50;
 
   Future<void> init() async {
@@ -37,6 +36,14 @@ class NotificationService {
       description: 'Reminders when focus/break sessions end',
       importance: Importance.high,
     );
+    // Silent alerts channel (no sound)
+    const androidChannelSilent = AndroidNotificationChannel(
+      'pomodoro_alerts_silent',
+      'Pomodoro Alerts (Silent)',
+      description: 'Reminders when sessions end (no sound)',
+      importance: Importance.high,
+      playSound: false,
+    );
     const statusChannel = AndroidNotificationChannel(
       'pomodoro_status',
       'Pomodoro Status',
@@ -50,6 +57,8 @@ class NotificationService {
         ?.createNotificationChannel(androidChannel);
     await _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(statusChannel);
+    await _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(androidChannelSilent);
 
     _initialized = true;
   }
@@ -118,22 +127,21 @@ class NotificationService {
   Future<void> showImmediate({required String title, required String body}) async {
     if (kIsWeb) return;
     await init();
-    final uri = await _prefs.getAndroidRingtoneUri();
     final androidDetails = AndroidNotificationDetails(
-      'pomodoro_alerts',
-      'Pomodoro Alerts',
-      channelDescription: 'Reminders when focus/break sessions end',
+      'pomodoro_alerts_silent',
+      'Pomodoro Alerts (Silent)',
+      channelDescription: 'Reminders when focus/break sessions end (no sound)',
       importance: Importance.max,
       priority: Priority.max,
       category: AndroidNotificationCategory.alarm,
       audioAttributesUsage: AudioAttributesUsage.alarm,
-      playSound: true,
-      sound: (uri != null && uri.isNotEmpty) ? UriAndroidNotificationSound(uri) : null,
+      playSound: false,
+      sound: null,
       fullScreenIntent: true,
       ticker: 'Pomodoro finished',
       enableVibration: true,
     );
-    const iosDetails = DarwinNotificationDetails(presentSound: true);
+    const iosDetails = DarwinNotificationDetails(presentSound: false);
     final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
     await _fln.show(0, title, body, details);
   }
@@ -150,22 +158,21 @@ class NotificationService {
     // Must be strictly in the future; clamp to at least +1s
     final delay = inFromNow.inSeconds <= 0 ? const Duration(seconds: 1) : inFromNow;
     final scheduled = tz.TZDateTime.now(tz.local).add(delay);
-    final uri = await _prefs.getAndroidRingtoneUri();
     final androidDetails = AndroidNotificationDetails(
-      'pomodoro_alerts',
-      'Pomodoro Alerts',
-      channelDescription: 'Reminders when focus/break sessions end',
+      'pomodoro_alerts_silent',
+      'Pomodoro Alerts (Silent)',
+      channelDescription: 'Reminders when focus/break sessions end (no sound)',
       importance: Importance.max,
       priority: Priority.max,
       category: AndroidNotificationCategory.alarm,
       audioAttributesUsage: AudioAttributesUsage.alarm,
-      playSound: true,
-      sound: (uri != null && uri.isNotEmpty) ? UriAndroidNotificationSound(uri) : null,
+      playSound: false,
+      sound: null,
       fullScreenIntent: true,
       ticker: 'Pomodoro finished',
       enableVibration: true,
     );
-    const iosDetails = DarwinNotificationDetails(presentSound: true);
+    const iosDetails = DarwinNotificationDetails(presentSound: false);
     final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
     if (preferExact) {
       final android = _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();

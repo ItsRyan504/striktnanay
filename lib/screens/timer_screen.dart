@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 // Removed storage dependency for session-only counters
 import '../services/notification_service.dart';
-import '../services/ringtone_service.dart';
-import '../services/notification_prefs.dart';
+// Removed alarm sound feature; ringtone service & prefs no longer needed.
 import '../services/timer_persistence.dart';
 import '../services/user_prefs.dart';
 
@@ -43,29 +41,57 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   static const int _notifIdWork = 100;
   static const int _notifIdBreak = 101;
   final TimerPersistence _persist = TimerPersistence();
+  bool _phaseCompleting = false; // guard against re-entrancy / duplicate completion handling
+  int? _targetEpochMs; // single source of truth for when current phase ends
+  VoidCallback? _autoContinueListener;
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
-    super.dispose();
+  int _nowMs() => DateTime.now().millisecondsSinceEpoch;
+  int _remainingFromTargetMs() {
+    if (_targetEpochMs == null) return _remainingSeconds * 1000;
+    final rem = _targetEpochMs! - _nowMs();
+    return rem < 0 ? 0 : rem;
+  }
+  int _remainingFromTargetSecondsCeil() {
+    final ms = _remainingFromTargetMs();
+    return (ms / 1000).ceil();
   }
 
   @override
   void initState() {
     super.initState();
+    _autoContinueListener = () {
+      final prefValue = autoContinueListenable.value;
+      if (mounted && _autoContinue != prefValue) {
+        setState(() => _autoContinue = prefValue);
+      }
+    };
+    autoContinueListenable.addListener(_autoContinueListener!);
     WidgetsBinding.instance.addObserver(this);
     _restoreTimerState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_autoContinueListener != null) {
+      autoContinueListenable.removeListener(_autoContinueListener!);
+    }
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _isForeground = false;
+      _timer?.cancel();
+      _timer = null;
       _saveTimerState();
     } else if (state == AppLifecycleState.resumed) {
       _isForeground = true;
-      _restoreTimerState();
+      if (!_resumeRunningTimerFromMemory()) {
+        _restoreTimerState();
+      }
     }
   }
 
@@ -73,59 +99,45 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     if (_isRunning) return;
     // Suggest disabling battery optimizations for reliable background alarms
     _ensureBatteryOptimizationsDisabled();
+    // Establish a stable end timestamp
+    _targetEpochMs = _nowMs() + (_remainingSeconds * 1000);
     _scheduleForCurrentPhase();
     _showOngoing();
     setState(() => _isRunning = true);
+    _startTicker();
+    _saveTimerState();
+  }
+
+  void _startTicker() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_remainingSeconds <= 0) {
+      final remaining = _remainingFromTargetSecondsCeil();
+      if (remaining <= 0) {
         t.cancel();
         _onPhaseComplete();
       } else {
-        setState(() => _remainingSeconds--);
-        // Update notification countdown while running (foreground or background)
+        setState(() => _remainingSeconds = remaining);
         _notif.updateCountdown(
-          remaining: Duration(seconds: _remainingSeconds),
+          remaining: Duration(seconds: remaining),
           isWork: _phase == PomodoroPhase.work,
         );
       }
     });
-    _saveTimerState();
   }
 
   Future<void> _ensureBatteryOptimizationsDisabled() async {
-    try {
-      const channel = MethodChannel('com.striktnanay.app/focus_mode');
-      final ignoring = await channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ?? true;
-      if (!ignoring && mounted) {
-        // Prompt once per session
-        final proceed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Improve Reliability'),
-            content: const Text(
-              'To make sure your timer alarms ring even in the background, '
-              'allow Strikt Nanay to ignore battery optimizations.'
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Open Settings')),
-            ],
-          ),
-        );
-        if (proceed == true) {
-          await channel.invokeMethod('openBatteryOptimizationSettings');
-        }
-      }
-    } catch (_) {
-      // ignore; continue normal flow
-    }
+    // Battery-optimization prompt removed to avoid interrupting timer flow.
+    return;
   }
 
   void _pauseTimer() {
     _timer?.cancel();
     _cancelScheduled();
     _notif.cancelOngoingStatus();
-    setState(() => _isRunning = false);
+    setState(() {
+      _isRunning = false;
+      _targetEpochMs = null;
+    });
     _showPausePopup();
     _saveTimerState();
   }
@@ -136,6 +148,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     _notif.cancelOngoingStatus();
     setState(() {
       _isRunning = false;
+      _targetEpochMs = null;
       if (!keepMode) {
         _phase = PomodoroPhase.work;
         _completedWorkSessions = 0;
@@ -159,6 +172,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         _totalPhaseSeconds = _remainingSeconds;
       }
     });
+    _targetEpochMs = null;
     if (_isRunning) {
       _scheduleForCurrentPhase();
       _showOngoing();
@@ -167,25 +181,45 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   }
 
   void _onPhaseComplete() async {
-    // Alarm sound (system alert) when in foreground only to avoid issues on background
-    if (_isForeground) {
-      SystemSound.play(SystemSoundType.alert);
-    }
-    _cancelScheduled();
-    _notif.cancelOngoingStatus();
-
-    if (_phase == PomodoroPhase.work) {
-      _completedWorkSessions++;
-    }
-
-    if (_isForeground) {
-      if (!_autoContinue) {
-        _showCompletionDialog();
-        return;
+    if (_phaseCompleting) return; // prevent duplicate invocation from multiple timers / lifecycle restores
+    _phaseCompleting = true;
+    try {
+      if (!mounted) return;
+      // Mark timer stopped explicitly
+      if (_isRunning) {
+        setState(() {
+          _isRunning = false;
+          _targetEpochMs = null;
+        });
       }
-      _showCompletionDialog(auto: true);
+      // Alarm sound disabled for now.
+      // Cancel any scheduled notifications safely
+      try {
+        await _cancelScheduled();
+      } catch (e) {
+        debugPrint('[Timer] _cancelScheduled error: $e');
+      }
+      try {
+        await _notif.cancelOngoingStatus();
+      } catch (e) {
+        debugPrint('[Timer] cancelOngoingStatus error: $e');
+      }
+
+      if (_phase == PomodoroPhase.work) {
+        _completedWorkSessions++;
+      }
+
+      if (_isForeground) {
+        if (!_autoContinue) {
+          _showCompletionDialog();
+        } else {
+          _showCompletionDialog(auto: true);
+        }
+      }
+      _saveTimerState();
+    } finally {
+      _phaseCompleting = false;
     }
-    _saveTimerState();
   }
 
   Future<void> _scheduleForCurrentPhase() async {
@@ -196,36 +230,32 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final title = isWork ? 'Work session complete' : 'Break over';
     final body = isWork ? 'Great job! Time for a break.' : 'Ready to focus again?';
     await _notif.cancel(id);
+    // Use targetEpoch if available for exact sync
+    final now = _nowMs();
+    final remainingSec = _targetEpochMs != null
+        ? (((_targetEpochMs! - now) / 1000).ceil()).clamp(1, 24 * 60 * 60)
+        : _remainingSeconds;
     await _notif.scheduleIn(
       title: title,
       body: body,
-      inFromNow: Duration(seconds: _remainingSeconds),
+      inFromNow: Duration(seconds: remainingSec),
       id: id,
       preferExact: true,
     );
 
-    // Also schedule native AlarmManager alarm to play the selected ringtone on Android
-    if (Platform.isAndroid) {
-      final targetEpoch = DateTime.now().millisecondsSinceEpoch + (_remainingSeconds * 1000);
-      final uri = await NotificationPrefs().getAndroidRingtoneUri();
-      // Reuse notification id as alarm request code for easy cancel
-      await RingtoneService().scheduleAndroidAlarm(id, targetEpoch, uri);
-    }
+    // Alarm sound disabled for now: skip native AlarmManager scheduling
   }
 
   Future<void> _cancelScheduled() async {
     await _notif.cancel(_notifIdWork);
     await _notif.cancel(_notifIdBreak);
-    if (Platform.isAndroid) {
-      // Cancel any pending native alarms too
-      await RingtoneService().cancelAndroidAlarm(_notifIdWork);
-      await RingtoneService().cancelAndroidAlarm(_notifIdBreak);
-    }
   }
 
   void _showOngoing() {
     final isWork = _phase == PomodoroPhase.work;
-    final endsAt = DateTime.now().add(Duration(seconds: _remainingSeconds));
+    final endsAt = _targetEpochMs != null
+        ? DateTime.fromMillisecondsSinceEpoch(_targetEpochMs!)
+        : DateTime.now().add(Duration(seconds: _remainingSeconds));
     final hh = endsAt.hour.toString().padLeft(2, '0');
     final mm = endsAt.minute.toString().padLeft(2, '0');
     final title = isWork ? 'Focus session running' : 'Break running';
@@ -233,23 +263,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     _notif.showOngoingStatus(title: title, body: body);
   }
 
-  Future<void> _pickAlarmSound() async {
-    final picker = RingtoneService();
-    final uri = await picker.pickAndroidAlarmRingtone();
-    if (uri == null || !mounted) return;
-    await NotificationPrefs().setAndroidRingtoneUri(uri);
-    // Re-schedule current phase so the new sound applies
-    if (_isRunning) {
-      await _scheduleForCurrentPhase();
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Alarm sound selected')),
-    );
-  }
+  // Alarm sound selection removed.
 
   Future<void> _saveTimerState() async {
-    final targetEpoch = _isRunning ? DateTime.now().millisecondsSinceEpoch + (_remainingSeconds * 1000) : 0;
+    final targetEpoch = _isRunning ? (_targetEpochMs ?? (_nowMs() + (_remainingSeconds * 1000))) : 0;
     await _persist.save(
       phase: _phase == PomodoroPhase.work ? 'work' : 'break',
       isRunning: _isRunning,
@@ -296,6 +313,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       _completedWorkSessions = completed;
     });
 
+    _targetEpochMs = wasRunning && targetEpoch > 0 ? targetEpoch : null;
     if (!wasRunning || targetEpoch == 0) {
       setState(() {
         _isRunning = false;
@@ -304,7 +322,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = _nowMs();
     final remaining = ((targetEpoch - now) / 1000).ceil();
     if (remaining <= 0) {
       // Phase elapsed while in background; complete it now
@@ -323,20 +341,24 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
     _scheduleForCurrentPhase();
     _showOngoing();
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_remainingSeconds <= 0) {
-        t.cancel();
-        _onPhaseComplete();
-      } else {
-        setState(() => _remainingSeconds--);
-        _notif.updateCountdown(
-          remaining: Duration(seconds: _remainingSeconds),
-          isWork: _phase == PomodoroPhase.work,
-        );
-      }
-    });
+    _startTicker();
 
+  }
+
+  bool _resumeRunningTimerFromMemory() {
+    if (!_isRunning || _targetEpochMs == null) {
+      return false;
+    }
+    final remaining = _remainingFromTargetSecondsCeil();
+    if (remaining <= 0) {
+      _onPhaseComplete();
+      return true;
+    }
+    setState(() => _remainingSeconds = remaining);
+    _scheduleForCurrentPhase();
+    _showOngoing();
+    _startTicker();
+    return true;
   }
 
   void _showCompletionDialog({bool auto = false}) {
@@ -352,9 +374,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               : 'Break finished. Ready for another focus session?'),
           actions: [
             TextButton(
-              onPressed: () async {
-                // Stop native alarm sound immediately when user acknowledges.
-                await RingtoneService().stopAndroidAlarmSound();
+              onPressed: () {
                 if (!mounted) return;
                 Navigator.pop(context);
                 _switchPhase();
@@ -366,8 +386,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               child: Text(nextIsBreak ? 'Start Break' : 'Start Work'),
             ),
             TextButton(
-              onPressed: () async {
-                await RingtoneService().stopAndroidAlarmSound();
+              onPressed: () {
                 if (!mounted) return;
                 Navigator.pop(context);
                 _switchPhase();
@@ -414,6 +433,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       _remainingSeconds = _workMinutes * 60;
       _totalPhaseSeconds = _remainingSeconds;
       _isRunning = false;
+      _targetEpochMs = null;
     });
   }
 
@@ -448,19 +468,19 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF333333),
+
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    tooltip: 'Notification sound',
-                    onPressed: _pickAlarmSound,
-                    icon: const Icon(Icons.notifications_active, color: Color(0xFF0D7377)),
-                  ),
+                  // Alarm sound button removed.
                   IconButton(
                     tooltip: _autoContinue
                         ? 'Auto-continue enabled (tap to disable)'
                         : 'Auto-continue disabled (tap to enable)',
-                    onPressed: () => setState(() => _autoContinue = !_autoContinue),
+                    onPressed: () async {
+                      final newVal = !_autoContinue;
+                      await UserPrefs().setAutoContinue(newVal);
+                    },
                     icon: Icon(
                       _autoContinue ? Icons.autorenew : Icons.handyman,
                       color: themeColor,
