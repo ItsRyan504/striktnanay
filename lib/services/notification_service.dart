@@ -84,13 +84,12 @@ class NotificationService {
     await _fln.show(_statusId, title, body, details);
   }
 
-  Future<void> updateCountdown({required Duration remaining, required bool isWork}) async {
+  Future<void> updateCountdown({required Duration remaining, required bool isWork, DateTime? endsAt}) async {
     if (kIsWeb) return;
     await init();
-    final mm = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final ss = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
     final title = isWork ? 'Focus session running' : 'Break running';
-    final body = 'Remaining $mm:$ss';
+    final body = isWork ? 'Stay focused, tap to manage.' : 'Rest up, tap to switch.';
+    final endMillis = endsAt?.millisecondsSinceEpoch ?? (DateTime.now().millisecondsSinceEpoch + remaining.inMilliseconds);
     final androidDetails = AndroidNotificationDetails(
       'pomodoro_status',
       'Pomodoro Status',
@@ -102,7 +101,10 @@ class NotificationService {
       autoCancel: false,
       onlyAlertOnce: true,
       playSound: false,
-      showWhen: false,
+      showWhen: true,
+      usesChronometer: true,
+      chronometerCountDown: true,
+      when: endMillis,
     );
     const iosDetails = DarwinNotificationDetails(presentSound: false);
     final details = NotificationDetails(android: androidDetails, iOS: iosDetails);

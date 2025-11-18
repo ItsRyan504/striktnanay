@@ -393,14 +393,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
             ),
           ),
           const Spacer(),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Icon(
-              isAngry ? Icons.warning_amber_rounded : Icons.thumb_up_alt,
-              color: Colors.white.withOpacity(0.9),
-              size: 24,
-            ),
-          ),
         ],
       ),
     );

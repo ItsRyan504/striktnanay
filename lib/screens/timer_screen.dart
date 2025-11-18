@@ -55,6 +55,9 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final ms = _remainingFromTargetMs();
     return (ms / 1000).ceil();
   }
+  Duration get _remainingDuration => Duration(milliseconds: _remainingFromTargetMs());
+  DateTime? get _targetDateTime =>
+      _targetEpochMs != null ? DateTime.fromMillisecondsSinceEpoch(_targetEpochMs!) : null;
 
   @override
   void initState() {
@@ -84,13 +87,20 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _isForeground = false;
-      _timer?.cancel();
-      _timer = null;
       _saveTimerState();
     } else if (state == AppLifecycleState.resumed) {
       _isForeground = true;
-      if (!_resumeRunningTimerFromMemory()) {
-        _restoreTimerState();
+      if (_timer == null) {
+        if (!_resumeRunningTimerFromMemory()) {
+          _restoreTimerState();
+        }
+      } else if (_isRunning) {
+        final remaining = _remainingFromTargetSecondsCeil();
+        if (remaining <= 0) {
+          _onPhaseComplete();
+        } else {
+          setState(() => _remainingSeconds = remaining);
+        }
       }
     }
   }
@@ -116,10 +126,15 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         t.cancel();
         _onPhaseComplete();
       } else {
-        setState(() => _remainingSeconds = remaining);
+        if (_isForeground && mounted) {
+          setState(() => _remainingSeconds = remaining);
+        } else {
+          _remainingSeconds = remaining;
+        }
         _notif.updateCountdown(
-          remaining: Duration(seconds: remaining),
+          remaining: _remainingDuration,
           isWork: _phase == PomodoroPhase.work,
+          endsAt: _targetDateTime,
         );
       }
     });
