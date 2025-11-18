@@ -8,6 +8,7 @@ import '../services/notification_service.dart';
 import '../services/ringtone_service.dart';
 import '../services/notification_prefs.dart';
 import '../services/timer_persistence.dart';
+import '../services/user_prefs.dart';
 
 enum PomodoroPhase { work, breakTime }
 
@@ -226,7 +227,23 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   Future<void> _restoreTimerState() async {
     final data = await _persist.read();
-    if (data == null) return;
+    if (data == null) {
+      // No prior timer state; load defaults from settings
+      final up = UserPrefs();
+      final wm = await up.getDefaultWorkMinutes();
+      final bm = await up.getDefaultBreakMinutes();
+      final ac = await up.getAutoContinue();
+      setState(() {
+        _workMinutes = wm;
+        _breakMinutes = bm;
+        _phase = PomodoroPhase.work;
+        _totalPhaseSeconds = wm * 60;
+        _remainingSeconds = _totalPhaseSeconds;
+        _isRunning = false;
+        _autoContinue = ac;
+      });
+      return;
+    }
     final phaseStr = data['phase'] as String? ?? 'work';
     final wasRunning = data['isRunning'] as bool? ?? false;
     final targetEpoch = data['targetEpochMs'] as int? ?? 0;

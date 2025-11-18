@@ -5,7 +5,7 @@ enum NavItem {
   calendar,
   timer,
   whitelist,
-  profile,
+  settings,
 }
 
 class BottomNavBar extends StatelessWidget {
@@ -53,9 +53,9 @@ class BottomNavBar extends StatelessWidget {
             onTap: () => onTap(NavItem.whitelist),
           ),
           _buildNavButton(
-            icon: Icons.person,
-            isActive: currentItem == NavItem.profile,
-            onTap: () => onTap(NavItem.profile),
+            icon: Icons.settings,
+            isActive: currentItem == NavItem.settings,
+            onTap: () => onTap(NavItem.settings),
           ),
         ],
       ),

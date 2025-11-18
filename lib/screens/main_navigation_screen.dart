@@ -4,7 +4,7 @@ import 'home_screen.dart';
 import 'calendar_screen.dart';
 import 'timer_screen.dart';
 import 'whitelist_screen.dart';
-import 'profile_screen.dart';
+import 'settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -22,7 +22,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const CalendarScreen(),
     const TimerScreen(),
     const WhitelistScreen(),
-    const ProfileScreen(),
+    const SettingsScreen(),
   ];
 
   void _onNavItemTapped(NavItem item) {
