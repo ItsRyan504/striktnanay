@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'notification_prefs.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -11,6 +12,8 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  final NotificationPrefs _prefs = NotificationPrefs();
+  static const int _statusId = 50;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -34,11 +37,48 @@ class NotificationService {
       description: 'Reminders when focus/break sessions end',
       importance: Importance.high,
     );
+    const statusChannel = AndroidNotificationChannel(
+      'pomodoro_status',
+      'Pomodoro Status',
+      description: 'Ongoing status while the timer is running',
+      importance: Importance.low,
+      playSound: false,
+      showBadge: false,
+    );
 
     await _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
+    await _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(statusChannel);
 
     _initialized = true;
+  }
+
+  Future<void> showOngoingStatus({required String title, required String body}) async {
+    if (kIsWeb) return;
+    await init();
+    final androidDetails = AndroidNotificationDetails(
+      'pomodoro_status',
+      'Pomodoro Status',
+      channelDescription: 'Ongoing status while the timer is running',
+      importance: Importance.low,
+      priority: Priority.low,
+      category: AndroidNotificationCategory.progress,
+      ongoing: true,
+      autoCancel: false,
+      onlyAlertOnce: true,
+      playSound: false,
+      showWhen: true,
+    );
+    const iosDetails = DarwinNotificationDetails(presentSound: false);
+    final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    await _fln.show(_statusId, title, body, details);
+  }
+
+  Future<void> cancelOngoingStatus() async {
+    if (kIsWeb) return;
+    await init();
+    await _fln.cancel(_statusId);
   }
 
   Future<bool> ensurePermission() async {
@@ -53,41 +93,92 @@ class NotificationService {
   Future<void> showImmediate({required String title, required String body}) async {
     if (kIsWeb) return;
     await init();
-    const androidDetails = AndroidNotificationDetails(
+    final uri = await _prefs.getAndroidRingtoneUri();
+    final androidDetails = AndroidNotificationDetails(
       'pomodoro_alerts',
       'Pomodoro Alerts',
       channelDescription: 'Reminders when focus/break sessions end',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      playSound: true,
+      sound: (uri != null && uri.isNotEmpty) ? UriAndroidNotificationSound(uri) : null,
+      fullScreenIntent: true,
+      ticker: 'Pomodoro finished',
+      enableVibration: true,
     );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    const iosDetails = DarwinNotificationDetails(presentSound: true);
+    final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
     await _fln.show(0, title, body, details);
   }
 
-  Future<void> scheduleIn({required String title, required String body, required Duration inFromNow, int id = 1}) async {
+  Future<void> scheduleIn({
+    required String title,
+    required String body,
+    required Duration inFromNow,
+    int id = 1,
+    bool preferExact = false,
+  }) async {
     if (kIsWeb) return;
     await init();
-    final scheduled = tz.TZDateTime.now(tz.local).add(inFromNow);
-    const androidDetails = AndroidNotificationDetails(
+    // Must be strictly in the future; clamp to at least +1s
+    final delay = inFromNow.inSeconds <= 0 ? const Duration(seconds: 1) : inFromNow;
+    final scheduled = tz.TZDateTime.now(tz.local).add(delay);
+    final uri = await _prefs.getAndroidRingtoneUri();
+    final androidDetails = AndroidNotificationDetails(
       'pomodoro_alerts',
       'Pomodoro Alerts',
       channelDescription: 'Reminders when focus/break sessions end',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      playSound: true,
+      sound: (uri != null && uri.isNotEmpty) ? UriAndroidNotificationSound(uri) : null,
+      fullScreenIntent: true,
+      ticker: 'Pomodoro finished',
+      enableVibration: true,
     );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    const iosDetails = DarwinNotificationDetails(presentSound: true);
+    final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    if (preferExact) {
+      final android = _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      // Request permission if needed; some devices show a settings page
+      await android?.requestExactAlarmsPermission();
+      try {
+        await _fln.zonedSchedule(
+          id,
+          title,
+          body,
+          scheduled,
+          details,
+          androidAllowWhileIdle: true,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: null,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+        return;
+      } catch (_) {
+        // Fall through to inexact if exact not permitted
+      }
+    }
     await _fln.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduled,
-      details,
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: null,
-    );
+        id,
+        title,
+        body,
+        scheduled,
+        details,
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: null,
+        androidScheduleMode: AndroidScheduleMode.inexact);
+  }
+
+  // Optional: call to open exact alarms settings if you later want precise timing
+  Future<void> openExactAlarmsSettings() async {
+    final android = _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestExactAlarmsPermission();
   }
 
   Future<void> cancel(int id) async {
