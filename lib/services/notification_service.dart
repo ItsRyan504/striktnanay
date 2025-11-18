@@ -187,9 +187,6 @@ class NotificationService {
           body,
           scheduled,
           details,
-          androidAllowWhileIdle: true,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: null,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
         return;
@@ -198,15 +195,13 @@ class NotificationService {
       }
     }
     await _fln.zonedSchedule(
-        id,
-        title,
-        body,
-        scheduled,
-        details,
-        androidAllowWhileIdle: true,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: null,
-        androidScheduleMode: AndroidScheduleMode.inexact);
+      id,
+      title,
+      body,
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    );
   }
 
   // Optional: call to open exact alarms settings if you later want precise timing
