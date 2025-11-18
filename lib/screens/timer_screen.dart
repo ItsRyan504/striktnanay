@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/storage_service.dart';
-import '../models/task.dart';
+// Removed storage dependency for session-only counters
+import '../services/notification_service.dart';
 
 enum PomodoroPhase { work, breakTime }
 
@@ -30,9 +30,12 @@ class _TimerScreenState extends State<TimerScreen> {
   bool _isRunning = false;
   bool _autoContinue = true; // auto move to next phase or wait for user
   final int _dailyPomodoroGoal = 4;
-  final StorageService _storageService = StorageService();
-  int _completedTasks = 0;
+  // Removed persisted completed tasks; we show a session-only counter
+  int _manualCompletedTasks = 0; // user-adjusted count via +/-
   bool _nagOpen = false;
+  final NotificationService _notif = NotificationService();
+  static const int _notifIdWork = 100;
+  static const int _notifIdBreak = 101;
 
   @override
   void dispose() {
@@ -43,23 +46,11 @@ class _TimerScreenState extends State<TimerScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshCompletedTasks();
-  }
-
-  Future<void> _refreshCompletedTasks() async {
-    try {
-      final List<Task> tasks = await _storageService.getTasks();
-      if (!mounted) return;
-      setState(() {
-        _completedTasks = tasks.where((t) => t.isCompleted).length;
-      });
-    } catch (_) {
-      // ignore errors silently
-    }
   }
 
   void _startTimer() {
     if (_isRunning) return;
+    _scheduleForCurrentPhase();
     setState(() => _isRunning = true);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_remainingSeconds <= 0) {
@@ -73,12 +64,14 @@ class _TimerScreenState extends State<TimerScreen> {
 
   void _pauseTimer() {
     _timer?.cancel();
+    _cancelScheduled();
     setState(() => _isRunning = false);
     _showPausePopup();
   }
 
   void _resetTimer({bool keepMode = true}) {
     _timer?.cancel();
+    _cancelScheduled();
     setState(() {
       _isRunning = false;
       if (!keepMode) {
@@ -103,11 +96,15 @@ class _TimerScreenState extends State<TimerScreen> {
         _totalPhaseSeconds = _remainingSeconds;
       }
     });
+    if (_isRunning) {
+      _scheduleForCurrentPhase();
+    }
   }
 
   void _onPhaseComplete() async {
     // Alarm sound (system alert)
     SystemSound.play(SystemSoundType.alert);
+    _cancelScheduled();
 
     if (_phase == PomodoroPhase.work) {
       _completedWorkSessions++;
@@ -119,6 +116,22 @@ class _TimerScreenState extends State<TimerScreen> {
     }
 
     _showCompletionDialog(auto: true);
+  }
+
+  Future<void> _scheduleForCurrentPhase() async {
+    final ok = await _notif.ensurePermission();
+    if (!ok) return;
+    final isWork = _phase == PomodoroPhase.work;
+    final id = isWork ? _notifIdWork : _notifIdBreak;
+    final title = isWork ? 'Work session complete' : 'Break over';
+    final body = isWork ? 'Great job! Time for a break.' : 'Ready to focus again?';
+    await _notif.cancel(id);
+    await _notif.scheduleIn(title: title, body: body, inFromNow: Duration(seconds: _remainingSeconds), id: id);
+  }
+
+  Future<void> _cancelScheduled() async {
+    await _notif.cancel(_notifIdWork);
+    await _notif.cancel(_notifIdBreak);
   }
 
   void _showCompletionDialog({bool auto = false}) {
@@ -442,7 +455,7 @@ class _TimerScreenState extends State<TimerScreen> {
               final stats = [
                 _statRow(Icons.local_fire_department, 'Pomodoros', '$completed', themeColor),
                 _statRow(Icons.timer_outlined, 'Focused time', formatHM(focusedSeconds), themeColor),
-                _statRow(Icons.check_circle_outline, 'Completed tasks', '$_completedTasks', themeColor),
+                _completedTasksRow(themeColor),
               ];
 
               return isNarrow
@@ -472,7 +485,9 @@ class _TimerScreenState extends State<TimerScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '$completed of $goal Pomodoros completed',
+            completed <= goal
+                ? '$completed of $goal Pomodoros completed'
+                : '$completed of $goal Pomodoros completed (+${completed - goal})',
             style: TextStyle(color: Colors.grey[600], fontSize: 12),
           ),
         ],
@@ -539,6 +554,69 @@ class _TimerScreenState extends State<TimerScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+
+  // Completed tasks row with +/- controls
+  Widget _completedTasksRow(Color color) {
+    // Session-only tally so it can go down to zero
+    final value = _manualCompletedTasks;
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(Icons.check_circle_outline, color: color, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Tasks finished (session)', style: TextStyle(color: Color(0xFF828282), fontSize: 12)),
+            ],
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _miniIconButton(Icons.remove, color, () {
+              setState(() {
+                if (_manualCompletedTasks > 0) _manualCompletedTasks--;
+              });
+            }),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text('$value', style: const TextStyle(color: Color(0xFF333333), fontWeight: FontWeight.w600)),
+            ),
+            _miniIconButton(Icons.add, color, () {
+              setState(() {
+                _manualCompletedTasks++;
+              });
+            }),
+          ],
+        )
+      ],
+    );
+  }
+
+  Widget _miniIconButton(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: color, size: 18),
       ),
     );
   }

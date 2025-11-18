@@ -42,6 +42,10 @@ dependencies:
 
   # Installed apps (replacement for discontinued device_apps)
   installed_apps: ^2.0.0
+  
+  # Local notifications for timer alerts
+  flutter_local_notifications: ^17.2.1
+  timezone: ^0.9.2
 
 dev_dependencies:
   flutter_test:
