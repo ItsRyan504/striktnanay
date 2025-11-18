@@ -295,7 +295,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               : 'Break finished. Ready for another focus session?'),
           actions: [
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                // Stop native alarm sound immediately when user acknowledges.
+                await RingtoneService().stopAndroidAlarmSound();
+                if (!mounted) return;
                 Navigator.pop(context);
                 _switchPhase();
                 _resetTimer();
@@ -306,7 +309,9 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               child: Text(nextIsBreak ? 'Start Break' : 'Start Work'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                await RingtoneService().stopAndroidAlarmSound();
+                if (!mounted) return;
                 Navigator.pop(context);
                 _switchPhase();
                 _resetTimer();
