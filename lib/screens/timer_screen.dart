@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +37,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   // Removed persisted completed tasks; we show a session-only counter
   int _manualCompletedTasks = 0; // user-adjusted count via +/-
   bool _nagOpen = false;
+  bool _isForeground = true;
   final NotificationService _notif = NotificationService();
   static const int _notifIdWork = 100;
   static const int _notifIdBreak = 101;
@@ -58,8 +60,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _isForeground = false;
       _saveTimerState();
     } else if (state == AppLifecycleState.resumed) {
+      _isForeground = true;
       _restoreTimerState();
     }
   }
@@ -126,8 +130,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   }
 
   void _onPhaseComplete() async {
-    // Alarm sound (system alert)
-    SystemSound.play(SystemSoundType.alert);
+    // Alarm sound (system alert) when in foreground only to avoid issues on background
+    if (_isForeground) {
+      SystemSound.play(SystemSoundType.alert);
+    }
     _cancelScheduled();
     _notif.cancelOngoingStatus();
 
@@ -135,12 +141,13 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       _completedWorkSessions++;
     }
 
-    if (!_autoContinue) {
-      _showCompletionDialog();
-      return;
+    if (_isForeground) {
+      if (!_autoContinue) {
+        _showCompletionDialog();
+        return;
+      }
+      _showCompletionDialog(auto: true);
     }
-
-    _showCompletionDialog(auto: true);
     _saveTimerState();
   }
 
@@ -159,11 +166,24 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       id: id,
       preferExact: true,
     );
+
+    // Also schedule native AlarmManager alarm to play the selected ringtone on Android
+    if (Platform.isAndroid) {
+      final targetEpoch = DateTime.now().millisecondsSinceEpoch + (_remainingSeconds * 1000);
+      final uri = await NotificationPrefs().getAndroidRingtoneUri();
+      // Reuse notification id as alarm request code for easy cancel
+      await RingtoneService().scheduleAndroidAlarm(id, targetEpoch, uri);
+    }
   }
 
   Future<void> _cancelScheduled() async {
     await _notif.cancel(_notifIdWork);
     await _notif.cancel(_notifIdBreak);
+    if (Platform.isAndroid) {
+      // Cancel any pending native alarms too
+      await RingtoneService().cancelAndroidAlarm(_notifIdWork);
+      await RingtoneService().cancelAndroidAlarm(_notifIdBreak);
+    }
   }
 
   void _showOngoing() {

@@ -76,6 +76,18 @@ class MainActivity: FlutterActivity() {
                     val cancelled = cancelAlarm(id)
                     result.success(cancelled)
                 }
+                "stopAlarmSound" -> {
+                    try {
+                        val svc = Intent(this, RingtonePlayerService::class.java).apply {
+                            action = RingtonePlayerService.ACTION_STOP
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        result.success(false)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

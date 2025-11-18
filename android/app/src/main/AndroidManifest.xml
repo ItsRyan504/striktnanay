@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Allow handling BOOT to re-schedule alarms if needed -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Foreground service permissions for media playback (Android 9+/14+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     
     <application
         android:label="striktnanay"
@@ -43,12 +46,12 @@
             android:value="2" />
         
         <!-- Native alarm receiver/service for reliable ringtone playback when app is not running -->
-        <receiver android:name=".AlarmReceiver" android:exported="true" />
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
 
         <service
             android:name=".RingtonePlayerService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback|phoneCall" />
+            android:foregroundServiceType="mediaPlayback" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

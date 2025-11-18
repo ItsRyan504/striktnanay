@@ -42,4 +42,14 @@ class RingtoneService {
       return false;
     }
   }
+
+  Future<bool> stopAndroidAlarmSound() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final res = await _channel.invokeMethod<bool>('stopAlarmSound');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }
