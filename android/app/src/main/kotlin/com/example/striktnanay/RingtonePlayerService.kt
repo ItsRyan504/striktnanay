@@ -21,6 +21,7 @@ class RingtonePlayerService : Service() {
     private var player: MediaPlayer? = null
     private var ringtone: Ringtone? = null
     private var wakeLock: PowerManager.WakeLock? = null
+        private var isInForeground: Boolean = false
 
     companion object {
         const val CHANNEL_ID = "pomodoro_native_alarm"
@@ -41,11 +42,16 @@ class RingtonePlayerService : Service() {
                 startForegroundWithNotification(uriStr)
                 startPlaying(uriStr)
             }
-            ACTION_STOP -> {
-                stopPlaying()
-                stopForeground(true)
-                stopSelf()
-            }
+                ACTION_STOP -> {
+                    stopPlaying()
+                    try {
+                        if (isInForeground) {
+                            stopForeground(true)
+                            isInForeground = false
+                        }
+                    } catch (_: Exception) {}
+                    stopSelf()
+                }
             else -> {
                 // If service started without explicit action, treat as play with extras
                 val uriStr = intent?.getStringExtra(EXTRA_URI)
@@ -91,6 +97,7 @@ class RingtonePlayerService : Service() {
             .build()
 
         startForeground(NOTIF_ID, notif)
+            isInForeground = true
     }
 
     private fun getNotificationIcon(): Int {
@@ -153,6 +160,7 @@ class RingtonePlayerService : Service() {
 
     override fun onDestroy() {
         stopPlaying()
+            isInForeground = false
         super.onDestroy()
     }
 }

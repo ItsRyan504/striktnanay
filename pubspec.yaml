@@ -40,7 +40,8 @@ dependencies:
   # Permissions (latest major)
   permission_handler: ^12.0.1
 
-  # Usage stats handled natively via MethodChannel (no external plugin)
+  # Installed apps (works across Android versions)
+  installed_apps: ^2.0.0
   
   # Local notifications for timer alerts
   flutter_local_notifications: ^17.2.1

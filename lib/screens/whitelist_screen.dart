@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:installed_apps/installed_apps.dart';
 import '../models/whitelist_app.dart';
 import '../services/storage_service.dart';
 
@@ -17,7 +17,6 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
   Map<String, bool> _whitelistMap = {};
   String _searchQuery = '';
   bool _showWhitelistedOnly = false;
-  static const MethodChannel _channel = MethodChannel('com.striktnanay.app/focus_mode');
 
   @override
   void initState() {
@@ -29,32 +28,23 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
     setState(() => _isLoading = true);
     _whitelistMap = await _storageService.getWhitelist();
     try {
-      // Retrieve launchable installed user apps from native (PackageManager)
-      dynamic result;
-      try {
-        result = await _channel.invokeMethod('getInstalledApps');
-      } on MissingPluginException {
-        // App wasn't fully rebuilt after native changes; fall back to recent apps
-        result = await _channel.invokeMethod('getRecentApps');
-      }
-      // Fallback to recent if empty
-      if (result is List && result.isEmpty) {
-        result = await _channel.invokeMethod('getRecentApps');
-      }
-      final List<dynamic> apps = (result is List) ? result : <dynamic>[];
-      final list = apps.map((raw) {
-        final map = Map<String, dynamic>.from(raw as Map);
-        final pkg = map['packageName'] as String? ?? '';
-        final name = map['appName'] as String? ?? pkg;
+      // Use installed_apps to list launchable, non-system apps with optional icons
+      final installedApps = await InstalledApps.getInstalledApps(
+        excludeSystemApps: true,
+        excludeNonLaunchableApps: true,
+        withIcon: true,
+      );
+      final list = installedApps.map((app) {
+        final iconBytes = app.icon; // may be null
         return WhitelistApp(
-          packageName: pkg,
-          appName: name,
-          icon: null,
-          isWhitelisted: _whitelistMap[pkg] ?? false,
+          packageName: app.packageName,
+          appName: app.name,
+          icon: iconBytes,
+          isWhitelisted: _whitelistMap[app.packageName] ?? false,
         );
       }).toList();
       list.sort((a,b)=>a.appName.compareTo(b.appName));
-      debugPrint('_loadApps fetched ${list.length} apps via usage stats');
+      debugPrint('_loadApps fetched ${list.length} apps via installed_apps');
       setState(() {
         _apps = list;
         _isLoading = false;
