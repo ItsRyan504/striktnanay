@@ -128,12 +128,21 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
   void _previousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+      // Adjust selected date to stay within new month bounds
+      final day = _selectedDate.day;
+      final maxDay = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+      final safeDay = day > maxDay ? maxDay : day;
+      _selectedDate = DateTime(_currentMonth.year, _currentMonth.month, safeDay);
     });
   }
 
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+      final day = _selectedDate.day;
+      final maxDay = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+      final safeDay = day > maxDay ? maxDay : day;
+      _selectedDate = DateTime(_currentMonth.year, _currentMonth.month, safeDay);
     });
   }
 
@@ -145,8 +154,10 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
 
     List<DateTime> days = [];
     
-    // Add empty cells for days before the first day of the month
-    for (int i = 1; i < firstWeekday; i++) {
+    // DateTime.weekday: Mon=1..Sun=7; our grid starts with Sunday at index 0.
+    // Leading blanks should be: Monday->1, Tuesday->2, ..., Saturday->6, Sunday->0
+    final leadingBlanks = firstWeekday % 7; // Sunday (7) -> 0
+    for (int i = 0; i < leadingBlanks; i++) {
       days.add(DateTime(0)); // Placeholder
     }
     
@@ -155,6 +166,14 @@ class _CalendarScreenState extends State<CalendarScreen> with AutomaticKeepAlive
       days.add(DateTime(_currentMonth.year, _currentMonth.month, day));
     }
     
+    // Optionally pad trailing blanks for consistent final row width
+    final remainder = days.length % 7;
+    if (remainder != 0) {
+      final trailing = 7 - remainder;
+      for (int i = 0; i < trailing; i++) {
+        days.add(DateTime(0));
+      }
+    }
     return days;
   }
 
