@@ -29,8 +29,18 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
     setState(() => _isLoading = true);
     _whitelistMap = await _storageService.getWhitelist();
     try {
-      // Retrieve recent, launchable user apps from native (UsageStats)
-      final dynamic result = await _channel.invokeMethod('getRecentApps');
+      // Retrieve launchable installed user apps from native (PackageManager)
+      dynamic result;
+      try {
+        result = await _channel.invokeMethod('getInstalledApps');
+      } on MissingPluginException {
+        // App wasn't fully rebuilt after native changes; fall back to recent apps
+        result = await _channel.invokeMethod('getRecentApps');
+      }
+      // Fallback to recent if empty
+      if (result is List && result.isEmpty) {
+        result = await _channel.invokeMethod('getRecentApps');
+      }
       final List<dynamic> apps = (result is List) ? result : <dynamic>[];
       final list = apps.map((raw) {
         final map = Map<String, dynamic>.from(raw as Map);

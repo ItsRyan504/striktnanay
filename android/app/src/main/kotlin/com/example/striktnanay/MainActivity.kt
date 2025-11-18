@@ -41,6 +41,10 @@ class MainActivity: FlutterActivity() {
                     val apps = getRecentApps()
                     result.success(apps)
                 }
+                "getInstalledApps" -> {
+                    val apps = getInstalledLaunchableApps()
+                    result.success(apps)
+                }
                 "checkUsageStatsPermission" -> {
                     val hasPermission = hasUsageStatsPermission()
                     result.success(hasPermission)
@@ -48,6 +52,37 @@ class MainActivity: FlutterActivity() {
                 "openUsageStatsSettings" -> {
                     openUsageStatsSettings()
                     result.success(true)
+                }
+                "isIgnoringBatteryOptimizations" -> {
+                    val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    val ignoring = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        pm.isIgnoringBatteryOptimizations(packageName)
+                    } else true
+                    result.success(ignoring)
+                }
+                "openBatteryOptimizationSettings" -> {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:$packageName")
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            try {
+                                val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                startActivity(intent)
+                                result.success(true)
+                            } catch (ex: Exception) {
+                                ex.printStackTrace()
+                                result.success(false)
+                            }
+                        }
+                    } else {
+                        result.success(true)
+                    }
                 }
                 else -> result.notImplemented()
             }
@@ -222,6 +257,39 @@ class MainActivity: FlutterActivity() {
             }
         }
 
+        return results
+    }
+
+    private fun getInstalledLaunchableApps(): List<Map<String, String>> {
+        val results = mutableListOf<Map<String, String>>()
+        val pm = packageManager
+        val intent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val activities = pm.queryIntentActivities(intent, 0)
+        val seen = HashSet<String>()
+        for (ri in activities) {
+            val pkg = ri.activityInfo?.packageName ?: continue
+            if (!seen.add(pkg)) continue
+            if (pkg == packageName) continue
+            try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                // Prefer non-system apps; include system if needed by policy, but skip here
+                if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) continue
+                val label = pm.getApplicationLabel(appInfo).toString()
+                results.add(mapOf(
+                    "packageName" to pkg,
+                    "appName" to label
+                ))
+            } catch (_: Exception) {
+                results.add(mapOf(
+                    "packageName" to pkg,
+                    "appName" to pkg
+                ))
+            }
+        }
+        // Sort by app name for stable listing
+        results.sortBy { it["appName"]?.lowercase() }
         return results
     }
 

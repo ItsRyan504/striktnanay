@@ -71,6 +71,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   void _startTimer() {
     if (_isRunning) return;
+    // Suggest disabling battery optimizations for reliable background alarms
+    _ensureBatteryOptimizationsDisabled();
     _scheduleForCurrentPhase();
     _showOngoing();
     setState(() => _isRunning = true);
@@ -88,6 +90,35 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       }
     });
     _saveTimerState();
+  }
+
+  Future<void> _ensureBatteryOptimizationsDisabled() async {
+    try {
+      const channel = MethodChannel('com.striktnanay.app/focus_mode');
+      final ignoring = await channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ?? true;
+      if (!ignoring && mounted) {
+        // Prompt once per session
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Improve Reliability'),
+            content: const Text(
+              'To make sure your timer alarms ring even in the background, '
+              'allow Strikt Nanay to ignore battery optimizations.'
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Open Settings')),
+            ],
+          ),
+        );
+        if (proceed == true) {
+          await channel.invokeMethod('openBatteryOptimizationSettings');
+        }
+      }
+    } catch (_) {
+      // ignore; continue normal flow
+    }
   }
 
   void _pauseTimer() {

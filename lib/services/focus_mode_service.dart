@@ -19,6 +19,7 @@ class FocusModeService {
   OverlayState? _overlayState;
   final StorageService _storageService = StorageService();
   String? _lastAppPackage;
+  DateTime? _lastOverlayShownAt;
   
   final List<String> _reminderQuotes = [
     "Focus on your tasks, anak!",
@@ -235,7 +236,14 @@ class FocusModeService {
           currentAppPackage == 'com.example.striktnanay'; // Your app's package name
       
       if (!isWhitelisted && _isActive) {
-        _showOverlay(context);
+        final now = DateTime.now();
+        final canShow = _overlayEntry == null && (
+          _lastOverlayShownAt == null || now.difference(_lastOverlayShownAt!).inMinutes >= 1
+        );
+        if (canShow) {
+          _lastOverlayShownAt = now;
+          _showOverlay(context);
+        }
       } else {
         _hideOverlay();
       }
