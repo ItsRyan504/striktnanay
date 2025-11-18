@@ -29,6 +29,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Subtask? _editingSubtask;
   int _lastProgress = 0;
   bool _showCelebration = false;
+  String? _hoveredSubtaskId; // Hover/long-press tracking for inline icons
+  String _nanayMessage = '';
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     _task = widget.task;
     _taskNameController.text = _task.name;
     _lastProgress = _task.progressPercentage;
+    _nanayMessage = _nanayDialogueForProgress(_task.progressPercentage);
   }
 
   @override
@@ -246,11 +249,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   onSubmitted: (_) => _saveTask(),
                 ),
               )
-            : Text(
-                _task.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+            : GestureDetector(
+                onDoubleTap: _startEditingTask,
+                child: Text(
+                  _task.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
         actions: [
@@ -275,9 +281,21 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             onSelected: (value) {
               if (value == 'delete') {
                 _deleteTask();
+              } else if (value == 'rename') {
+                _startEditingTask();
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'rename',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, color: Colors.blueGrey),
+                    SizedBox(width: 8),
+                    Text('Rename Task'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'delete',
                 child: Row(
@@ -313,30 +331,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Progress',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '$progress%',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: taskColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: _buildNanayBubble(taskColor)),
+                  const SizedBox(width: 12),
                   Stack(
                     alignment: Alignment.center,
                     children: [
@@ -350,14 +348,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           valueColor: AlwaysStoppedAnimation<Color>(taskColor),
                         ),
                       ),
-                      Text(
-                        '$progress%',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: taskColor,
-                        ),
-                      ),
                       IgnorePointer(
                         child: AnimatedOpacity(
                           opacity: _showCelebration ? 1 : 0,
@@ -367,6 +357,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             color: taskColor.withOpacity(0.9),
                             size: 92,
                           ),
+                        ),
+                      ),
+                      Text(
+                        '$progress%',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: taskColor,
                         ),
                       ),
                     ],
@@ -394,41 +392,52 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Task Info
-                    if (_task.dueDate != null) ...[
-                      Row(
-                        children: [
-                          Icon(Icons.calendar_today,
-                              size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Due: ${_formatDate(_task.dueDate!)}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
+                    // Task Info (Due Date & Category editable)
+                    Row(
+                      children: [
+                        Flexible(
+                          child: InputChip(
+                            avatar: const Icon(Icons.calendar_today, size: 16),
+                            label: Text(
+                              _task.dueDate != null
+                                  ? _formatDateTime(_task.dueDate!)
+                                  : 'No due date',
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            onPressed: _pickDueDate,
+                            onDeleted: _task.dueDate != null ? _clearDueDate : null,
+                            deleteIcon: _task.dueDate != null
+                                ? const Icon(Icons.clear, size: 18)
+                                : null,
+                            tooltip: 'Tap to edit${_task.dueDate != null ? " / delete" : ''}',
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
-                    if (_task.category != null) ...[
-                      Row(
-                        children: [
-                          Icon(Icons.label, size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Category: ${_task.category}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: InputChip(
+                            avatar: const Icon(Icons.label, size: 16),
+                            label: Text(
+                              _task.category?.isNotEmpty == true
+                                  ? _task.category!
+                                  : 'No category',
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            onPressed: _pickCategory,
+                            onDeleted: _task.category != null ? _clearCategory : null,
+                            deleteIcon: _task.category != null
+                                ? const Icon(Icons.clear, size: 18)
+                                : null,
+                            tooltip: 'Tap to edit${_task.category != null ? " / delete" : ''}',
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
                     // Subtasks Section
                     Row(
@@ -542,7 +551,48 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         }
       });
     }
+    _nanayMessage = _nanayDialogueForProgress(current);
     _lastProgress = current;
+  }
+
+  String _nanayDialogueForProgress(int p) {
+    if (p == 0) return 'Start na tayo, nak.';
+    if (p < 25) return 'Konting simula lang yan.';
+    if (p < 50) return 'Good, keep going.';
+    if (p < 75) return 'Malapit na tayo!' ;
+    if (p < 100) return 'Finish strong, nak!';
+    return 'Proud si Nanay!';
+  }
+
+  Widget _buildNanayBubble(Color taskColor) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 26,
+          backgroundColor: taskColor.withOpacity(0.15),
+          child: const Icon(Icons.face_2, size: 32, color: Colors.teal),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: taskColor.withOpacity(0.4), width: 2),
+            ),
+            child: Text(
+              _nanayMessage,
+              style: const TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFF333333),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _showColorPicker() {
@@ -561,7 +611,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         title: const Text('Select Color'),
         content: Wrap(
           spacing: 16,
-          runSpacing: 16,
+            runSpacing: 16,
           children: colors.map((color) {
             return GestureDetector(
               onTap: () async {
@@ -595,7 +645,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   Widget _buildSubtaskItem(Subtask subtask) {
     final isEditing = _isEditingSubtask && _editingSubtask?.id == subtask.id;
-    
+    final hovering = _hoveredSubtaskId == subtask.id;
+
     return Dismissible(
       key: Key(subtask.id),
       direction: DismissDirection.endToStart,
@@ -609,79 +660,99 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       onDismissed: (_) => _deleteSubtask(subtask),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: subtask.isCompleted
-                ? Colors.green.withOpacity(0.3)
-                : Colors.grey[300]!,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Checkbox(
-              value: subtask.isCompleted,
-              onChanged: isEditing ? null : (_) => _toggleSubtask(subtask),
-              activeColor: _getTaskColor(),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hoveredSubtaskId = subtask.id),
+        onExit: (_) => setState(() {
+          if (_hoveredSubtaskId == subtask.id) _hoveredSubtaskId = null;
+        }),
+        child: GestureDetector(
+          onLongPress: () => setState(() {
+            // Toggle visibility of the inline action buttons on long-press
+            _hoveredSubtaskId = _hoveredSubtaskId == subtask.id ? null : subtask.id;
+          }),
+          onTap: () {
+            // If action buttons are visible, tap on the row hides them
+            if (_hoveredSubtaskId == subtask.id) {
+              setState(() => _hoveredSubtaskId = null);
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: subtask.isCompleted
+                    ? Colors.green.withOpacity(0.3)
+                    : Colors.grey[300]!,
+                width: 1,
+              ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: isEditing
-                  ? TextField(
-                      controller: _subtaskController,
-                      autofocus: true,
-                      style: const TextStyle(fontSize: 16),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                      onSubmitted: (_) => _addSubtask(),
-                    )
-                  : GestureDetector(
-                      onTap: () => _startEditingSubtask(subtask),
-                      child: Text(
-                        subtask.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          decoration: subtask.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: subtask.isCompleted
-                              ? Colors.grey[500]
-                              : const Color(0xFF333333),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: subtask.isCompleted,
+                  onChanged: isEditing ? null : (_) => _toggleSubtask(subtask),
+                  activeColor: _getTaskColor(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: isEditing
+                      ? TextField(
+                          controller: _subtaskController,
+                          autofocus: true,
+                          style: const TextStyle(fontSize: 16),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          onSubmitted: (_) => _addSubtask(),
+                        )
+                      : GestureDetector(
+                          onTap: () => _startEditingSubtask(subtask),
+                          child: Text(
+                            subtask.name,
+                            style: TextStyle(
+                              fontSize: 16,
+                              decoration: subtask.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: subtask.isCompleted
+                                  ? Colors.grey[500]
+                                  : const Color(0xFF333333),
+                            ),
+                          ),
                         ),
-                      ),
+                ),
+                if (!isEditing && hovering) ...[
+                  IconButton(
+                    onPressed: () => _startEditingSubtask(subtask),
+                    icon: Icon(
+                      Icons.edit,
+                      size: 18,
+                      color: Colors.grey[600],
                     ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Edit',
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => _deleteSubtask(subtask),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: Colors.red[400],
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Delete',
+                  ),
+                ],
+              ],
             ),
-            if (!isEditing) ...[
-              IconButton(
-                onPressed: () => _startEditingSubtask(subtask),
-                icon: Icon(
-                  Icons.edit,
-                  size: 18,
-                  color: Colors.grey[600],
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () => _deleteSubtask(subtask),
-                icon: Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: Colors.red[400],
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -689,6 +760,138 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final date = _formatDate(dateTime);
+    final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final ampm = dateTime.hour >= 12 ? 'PM' : 'AM';
+    return '$date $hour:$minute $ampm';
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final initial = _task.dueDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(now) ? now : initial,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked != null) {
+      // Also pick time
+      final existing = _task.dueDate;
+      final initialTime = existing != null
+          ? TimeOfDay(hour: existing.hour, minute: existing.minute)
+          : const TimeOfDay(hour: 9, minute: 0);
+      final time = await showTimePicker(
+        context: context,
+        initialTime: initialTime,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child ?? const SizedBox.shrink(),
+        ),
+      );
+      final chosen = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        time?.hour ?? existing?.hour ?? 0,
+        time?.minute ?? existing?.minute ?? 0,
+      );
+      setState(() {
+        _task = _task.copyWith(dueDate: chosen);
+      });
+      await _saveTask(shouldPop: false);
+    }
+  }
+
+  Future<void> _clearDueDate() async {
+    setState(() {
+      _task = _task.copyWith(dueDate: null);
+    });
+    await _saveTask(shouldPop: false);
+  }
+
+  Future<void> _pickCategory() async {
+    // Fixed base categories for selection; custom does not alter home chips
+    final options = const ['Studying', 'Chores', 'Work'];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                title: Text('Select Category', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              ...options.map((c) => ListTile(
+                    title: Text(c),
+                    trailing: _task.category == c ? const Icon(Icons.check) : null,
+                    onTap: () => Navigator.pop(context, c),
+                  )),
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Custom…'),
+                onTap: () => Navigator.pop(context, '__custom__'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.clear),
+                title: const Text('None'),
+                onTap: () => Navigator.pop(context, ''),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null) return;
+    String? categoryValue;
+    if (selected == '__custom__') {
+      final controller = TextEditingController(text: _task.category ?? '');
+      final custom = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Custom Category'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Enter category'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (custom != null && custom.isNotEmpty) {
+        categoryValue = custom;
+      } else {
+        return; // no change
+      }
+    } else {
+      categoryValue = selected;
+    }
+    setState(() {
+      _task = _task.copyWith(category: categoryValue!.isEmpty ? null : categoryValue);
+    });
+    await _saveTask(shouldPop: false);
+  }
+
+  Future<void> _clearCategory() async {
+    setState(() {
+      _task = _task.copyWith(category: null);
+    });
+    await _saveTask(shouldPop: false);
   }
 }
 

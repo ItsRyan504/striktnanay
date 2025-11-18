@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:device_apps/device_apps.dart';
+import 'package:installed_apps/installed_apps.dart';
+import 'package:installed_apps/app_info.dart';
 import '../models/whitelist_app.dart';
 import '../services/storage_service.dart';
 
@@ -29,39 +30,24 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
     // Load existing whitelist
     _whitelistMap = await _storageService.getWhitelist();
 
-    // Get installed apps (excluding system apps)
+    // Get installed apps using maintained installed_apps plugin
     try {
-      final installedApps = await DeviceApps.getInstalledApplications(
-        includeSystemApps: false,
-        includeAppIcons: true,
-        onlyAppsWithLaunchIntent: true,
+      final installedApps = await InstalledApps.getInstalledApps(
+        excludeSystemApps: true,
+        excludeNonLaunchableApps: true,
+        withIcon: true,
       );
-
       final appsList = <WhitelistApp>[];
-      for (final app in installedApps) {
-        Uint8List? iconBytes;
-        try {
-          // Try to get icon using dynamic access since includeAppIcons is true
-          // The icon property should be available when includeAppIcons is true
-          final dynamic appDynamic = app;
-          if (appDynamic.icon != null && appDynamic.icon is Uint8List) {
-            iconBytes = appDynamic.icon as Uint8List;
-          }
-        } catch (e) {
-          // Icon loading failed, continue without icon
-        }
-        
+      for (final AppInfo app in installedApps) {
+        Uint8List? iconBytes = app.icon; // May be null
         appsList.add(WhitelistApp(
           packageName: app.packageName,
-          appName: app.appName,
+          appName: app.name,
           icon: iconBytes,
           isWhitelisted: _whitelistMap[app.packageName] ?? false,
         ));
       }
-
-      // Sort by app name
       appsList.sort((a, b) => a.appName.compareTo(b.appName));
-
       setState(() {
         _apps = appsList;
         _isLoading = false;

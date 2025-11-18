@@ -7,6 +7,7 @@ class StorageService {
   static const String _tasksKey = 'tasks';
   static const String _whitelistKey = 'whitelist';
   static const String _focusModeKey = 'focusMode';
+  static const String _categoriesKey = 'categories';
 
   // Tasks
   Future<List<Task>> getTasks() async {
@@ -105,6 +106,29 @@ class StorageService {
   Future<void> setFocusModeEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_focusModeKey, enabled);
+  }
+
+  // Categories
+  Future<List<String>> getCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_categoriesKey);
+    if (jsonStr == null) {
+      // Provide sensible defaults if none saved yet (mutable list)
+      return ['Studying', 'Chores', 'Work'];
+    }
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is List) {
+        return decoded.whereType<String>().toList();
+      }
+    } catch (_) {}
+    return ['Studying', 'Chores', 'Work'];
+  }
+
+  Future<void> saveCategories(List<String> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(categories);
+    await prefs.setString(_categoriesKey, jsonStr);
   }
 }
 

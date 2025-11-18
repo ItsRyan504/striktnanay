@@ -99,15 +99,50 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _categories.map((category) {
-              return ListTile(
-                title: Text(category),
+            children: [
+              ..._categories.map((category) => ListTile(
+                    title: Text(category),
+                    onTap: () {
+                      setState(() => _selectedCategory = category);
+                      Navigator.pop(context);
+                    },
+                  )),
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Custom…'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final controller = TextEditingController(text: _selectedCategory ?? '');
+                  final custom = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Custom Category'),
+                      content: TextField(
+                        controller: controller,
+                        autofocus: true,
+                        decoration: const InputDecoration(hintText: 'Enter category'),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+                      ],
+                    ),
+                  );
+                  if (custom != null && custom.isNotEmpty) {
+                    setState(() => _selectedCategory = custom);
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.clear),
+                title: const Text('None'),
                 onTap: () {
-                  setState(() => _selectedCategory = category);
+                  setState(() => _selectedCategory = null);
                   Navigator.pop(context);
                 },
-              );
-            }).toList(),
+              ),
+            ],
           ),
         );
       },
@@ -188,6 +223,27 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     if (_taskNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a task name')),
+      );
+      return;
+    }
+
+    if (_selectedCategory == null || _selectedCategory!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
+      return;
+    }
+
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select start and end dates')),
+      );
+      return;
+    }
+
+    if (_endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End date must be after start date')),
       );
       return;
     }

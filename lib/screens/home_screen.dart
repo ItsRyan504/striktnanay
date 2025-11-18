@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   bool _isLoading = true;
   String? _selectedCategory;
   String _searchQuery = '';
+  List<String> _categories = [];
 
   @override
   void initState() {
@@ -54,6 +55,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
     final tasks = await _storageService.getTasks();
     setState(() {
       _tasks = tasks;
+      // Use fixed base categories for home chips
+      _categories = ['Studying', 'Chores', 'Work'];
       _filterTasks();
       _isLoading = false;
     });
@@ -62,7 +65,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   void _filterTasks() {
     Iterable<Task> list = _tasks;
     if (_selectedCategory != null) {
-      list = list.where((task) => task.category == _selectedCategory);
+      if (_selectedCategory == 'Other') {
+        const base = {'Studying', 'Chores', 'Work'};
+        list = list.where((task) => task.category != null && !base.contains(task.category));
+      } else {
+        list = list.where((task) => task.category == _selectedCategory);
+      }
     }
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
@@ -76,6 +84,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
       _selectedCategory = _selectedCategory == category ? null : category;
       _filterTasks();
     });
+  }
+
+  // Note: Custom add removed by request. We show a static 'Other' chip instead.
+
+  Future<void> _deleteCategory(String category) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Category'),
+        content: Text('Remove "$category" category? Tasks keep their category label but filtering chip disappears.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      _categories.remove(category);
+      await _storageService.saveCategories(_categories);
+      if (_selectedCategory == category) _selectedCategory = null;
+      setState(() {});
+    }
   }
 
   Future<void> _addTask() async {
@@ -375,50 +405,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildCategoryButton('Studying'),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildCategoryButton('Chores'),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildCategoryButton('Work'),
-            ),
-          ],
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ..._categories.map((c) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildCategoryChip(c),
+                  )),
+              const SizedBox(width: 8),
+              // Static "Other" chip instead of a custom add dialog
+              _buildCategoryChip('Other'),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCategoryButton(String label) {
+  Widget _buildCategoryChip(String label) {
     final isSelected = _selectedCategory == label;
     return GestureDetector(
-      onTap: () => _onCategorySelected(label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: isSelected 
-              ? const Color(0xFF0D7377) 
-              : const Color(0xFF14A085),
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected
-              ? Border.all(color: const Color(0xFF0D7377), width: 2)
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+      onLongPress: () {
+        // Prevent deleting default seed categories if desired
+        if (['Studying', 'Chores', 'Work', 'Other'].contains(label)) return;
+        _deleteCategory(label);
+      },
+      child: InputChip(
+        selected: isSelected,
+        label: Text(label),
+        onPressed: () => _onCategorySelected(label),
+        selectedColor: const Color(0xFF0D7377),
+        backgroundColor: const Color(0xFF14A085),
+        labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
       ),
     );
   }
