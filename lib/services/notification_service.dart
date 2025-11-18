@@ -75,6 +75,31 @@ class NotificationService {
     await _fln.show(_statusId, title, body, details);
   }
 
+  Future<void> updateCountdown({required Duration remaining, required bool isWork}) async {
+    if (kIsWeb) return;
+    await init();
+    final mm = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final title = isWork ? 'Focus session running' : 'Break running';
+    final body = 'Remaining $mm:$ss';
+    final androidDetails = AndroidNotificationDetails(
+      'pomodoro_status',
+      'Pomodoro Status',
+      channelDescription: 'Ongoing status while the timer is running',
+      importance: Importance.low,
+      priority: Priority.low,
+      category: AndroidNotificationCategory.progress,
+      ongoing: true,
+      autoCancel: false,
+      onlyAlertOnce: true,
+      playSound: false,
+      showWhen: false,
+    );
+    const iosDetails = DarwinNotificationDetails(presentSound: false);
+    final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    await _fln.show(_statusId, title, body, details);
+  }
+
   Future<void> cancelOngoingStatus() async {
     if (kIsWeb) return;
     await init();

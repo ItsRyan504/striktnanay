@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:installed_apps/installed_apps.dart';
+import 'package:flutter/services.dart';
 import '../models/whitelist_app.dart';
 import '../services/storage_service.dart';
 
@@ -17,6 +17,7 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
   Map<String, bool> _whitelistMap = {};
   String _searchQuery = '';
   bool _showWhitelistedOnly = false;
+  static const MethodChannel _channel = MethodChannel('com.striktnanay.app/focus_mode');
 
   @override
   void initState() {
@@ -28,23 +29,22 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
     setState(() => _isLoading = true);
     _whitelistMap = await _storageService.getWhitelist();
     try {
-      final installedApps = await InstalledApps.getInstalledApps(
-        excludeSystemApps: true,
-        excludeNonLaunchableApps: true,
-        withIcon: true,
-      );
-      final list = installedApps.map((app) {
-        final iconBytes = app.icon; // may be null
+      // Retrieve recent, launchable user apps from native (UsageStats)
+      final dynamic result = await _channel.invokeMethod('getRecentApps');
+      final List<dynamic> apps = (result is List) ? result : <dynamic>[];
+      final list = apps.map((raw) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final pkg = map['packageName'] as String? ?? '';
+        final name = map['appName'] as String? ?? pkg;
         return WhitelistApp(
-          packageName: app.packageName,
-            appName: app.name,
-            icon: iconBytes,
-            isWhitelisted: _whitelistMap[app.packageName] ?? false,
+          packageName: pkg,
+          appName: name,
+          icon: null,
+          isWhitelisted: _whitelistMap[pkg] ?? false,
         );
       }).toList();
       list.sort((a,b)=>a.appName.compareTo(b.appName));
-      // Debug visibility count
-      debugPrint('_loadApps fetched ${list.length} apps (installedApps raw length: ${installedApps.length})');
+      debugPrint('_loadApps fetched ${list.length} apps via usage stats');
       setState(() {
         _apps = list;
         _isLoading = false;

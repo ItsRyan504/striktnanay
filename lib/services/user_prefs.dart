@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 class UserPrefs {
   static const _kUserName = 'user_name';
@@ -8,12 +9,19 @@ class UserPrefs {
 
   Future<String> getUserName() async {
     final sp = await SharedPreferences.getInstance();
-    return sp.getString(_kUserName) ?? 'User';
+    final name = sp.getString(_kUserName) ?? 'User';
+    // Initialize notifier if not yet set
+    if (_userNameNotifier.value != name) {
+      _userNameNotifier.value = name;
+    }
+    return name;
     }
 
   Future<void> setUserName(String name) async {
     final sp = await SharedPreferences.getInstance();
-    await sp.setString(_kUserName, name.trim().isEmpty ? 'User' : name.trim());
+    final normalized = name.trim().isEmpty ? 'User' : name.trim();
+    await sp.setString(_kUserName, normalized);
+    _userNameNotifier.value = normalized;
   }
 
   Future<int> getDefaultWorkMinutes() async {
@@ -42,3 +50,8 @@ class UserPrefs {
     await sp.setBool(_kAutoContinue, value);
   }
 }
+
+// Global ValueNotifier to broadcast username changes across UI without heavy state management.
+final ValueNotifier<String> _userNameNotifier = ValueNotifier<String>('User');
+
+ValueListenable<String> get userNameListenable => _userNameNotifier;

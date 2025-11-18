@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/user_prefs.dart';
 import '../models/task.dart';
 import '../services/storage_service.dart';
 import '../services/task_sync.dart';
@@ -295,13 +296,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
   }
 
   Widget _buildGreeting() {
-    return const Center(
-      child: Text(
-        'Hello, User!',
-        style: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF333333),
+    return Center(
+      child: ValueListenableBuilder<String>(
+        valueListenable: userNameListenable,
+        builder: (context, name, _) => Text(
+          'Hello, $name!',
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF333333),
+          ),
         ),
       ),
     );
@@ -335,6 +339,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
     required bool isAngry,
   }) {
     return Container(
+      height: 160,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -385,6 +390,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Au
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
+            ),
+          ),
+          const Spacer(),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Icon(
+              isAngry ? Icons.warning_amber_rounded : Icons.thumb_up_alt,
+              color: Colors.white.withOpacity(0.9),
+              size: 24,
             ),
           ),
         ],

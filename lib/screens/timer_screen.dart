@@ -80,6 +80,11 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         _onPhaseComplete();
       } else {
         setState(() => _remainingSeconds--);
+        // Update notification countdown while running (foreground or background)
+        _notif.updateCountdown(
+          remaining: Duration(seconds: _remainingSeconds),
+          isWork: _phase == PomodoroPhase.work,
+        );
       }
     });
     _saveTimerState();
@@ -294,6 +299,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         _onPhaseComplete();
       } else {
         setState(() => _remainingSeconds--);
+        _notif.updateCountdown(
+          remaining: Duration(seconds: _remainingSeconds),
+          isWork: _phase == PomodoroPhase.work,
+        );
       }
     });
 

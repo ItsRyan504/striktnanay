@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.Ringtone
+import android.os.PowerManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -17,6 +19,8 @@ import androidx.core.app.NotificationCompat
 
 class RingtonePlayerService : Service() {
     private var player: MediaPlayer? = null
+    private var ringtone: Ringtone? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
         const val CHANNEL_ID = "pomodoro_native_alarm"
@@ -98,6 +102,14 @@ class RingtonePlayerService : Service() {
     private fun startPlaying(uriStr: String?) {
         stopPlaying()
         try {
+            // Acquire a partial wakelock so playback starts reliably when device wakes for alarm
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (wakeLock == null || !(wakeLock?.isHeld ?: false)) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StriktNanay:AlarmWakelock").apply {
+                    setReferenceCounted(false)
+                    acquire(60_000) // hold up to 60s, auto-release safeguard
+                }
+            }
             val uri = if (!uriStr.isNullOrEmpty()) Uri.parse(uriStr) else RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
             player = MediaPlayer().apply {
                 setAudioAttributes(
@@ -113,6 +125,13 @@ class RingtonePlayerService : Service() {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            // Fallback to system Ringtone if MediaPlayer fails (permissions / OEM quirk)
+            try {
+                val fallbackUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ringtone = RingtoneManager.getRingtone(this, fallbackUri)
+                ringtone?.play()
+            } catch (ignored: Exception) {
+            }
         }
     }
 
@@ -124,6 +143,12 @@ class RingtonePlayerService : Service() {
             // ignore
         }
         player = null
+        try { ringtone?.stop() } catch (_: Exception) {}
+        ringtone = null
+        if (wakeLock?.isHeld == true) {
+            try { wakeLock?.release() } catch (_: Exception) {}
+        }
+        wakeLock = null
     }
 
     override fun onDestroy() {

@@ -6,6 +6,8 @@ import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -34,6 +36,10 @@ class MainActivity: FlutterActivity() {
                 "getCurrentApp" -> {
                     val packageName = getCurrentAppPackage()
                     result.success(packageName)
+                }
+                "getRecentApps" -> {
+                    val apps = getRecentApps()
+                    result.success(apps)
                 }
                 "checkUsageStatsPermission" -> {
                     val hasPermission = hasUsageStatsPermission()
@@ -160,6 +166,63 @@ class MainActivity: FlutterActivity() {
         }
 
         return mostRecentUsage?.packageName
+    }
+
+    private fun getRecentApps(): List<Map<String, String>> {
+        val results = mutableListOf<Map<String, String>>()
+        if (!hasUsageStatsPermission()) {
+            return results
+        }
+
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val pm = packageManager
+        val now = System.currentTimeMillis()
+        // Look back 30 days for breadth
+        val stats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            now - TimeUnit.DAYS.toMillis(30),
+            now
+        ) ?: emptyList()
+
+        if (stats.isEmpty()) return results
+
+        // Keep the latest usage time per package
+        val latestByPackage = HashMap<String, Long>()
+        for (s in stats) {
+            val prev = latestByPackage[s.packageName]
+            if (prev == null || s.lastTimeUsed > prev) {
+                latestByPackage[s.packageName] = s.lastTimeUsed
+            }
+        }
+
+        // Sort by recency, descending
+        val sorted = latestByPackage.entries.sortedByDescending { it.value }
+
+        for ((pkg, _) in sorted) {
+            if (pkg == packageName) continue // skip this app
+            // Only include launchable apps
+            val launchIntent = pm.getLaunchIntentForPackage(pkg) ?: continue
+            try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                // Exclude system apps
+                if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) continue
+                val label = pm.getApplicationLabel(appInfo).toString()
+                results.add(mapOf(
+                    "packageName" to pkg,
+                    "appName" to label
+                ))
+            } catch (_: PackageManager.NameNotFoundException) {
+                // Fallback to package name as label
+                results.add(mapOf(
+                    "packageName" to pkg,
+                    "appName" to pkg
+                ))
+            } catch (_: Exception) {
+                // Ignore unexpected packages
+            }
+        }
+
+        return results
     }
 
     private fun hasUsageStatsPermission(): Boolean {

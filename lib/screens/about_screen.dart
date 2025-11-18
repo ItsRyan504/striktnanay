@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/user_prefs.dart';
+import 'package:flutter/foundation.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -9,63 +10,63 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  String _name = 'User';
+  late final ValueListenable<String> _nameListenable;
 
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = UserPrefs();
-    final name = await prefs.getUserName();
-    if (!mounted) return;
-    setState(() => _name = name);
+    _nameListenable = userNameListenable;
+    // Prime notifier if needed
+    UserPrefs().getUserName();
   }
 
   @override
   Widget build(BuildContext context) {
-    final body = _aboutText(_name);
-    return Scaffold(
-      appBar: AppBar(title: const Text('About')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Striktnanay',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+    return ValueListenableBuilder<String>(
+      valueListenable: _nameListenable,
+      builder: (context, name, _) {
+        final body = _aboutText(name);
+        return Scaffold(
+          appBar: AppBar(title: const Text('About')),
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Striktnanay',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Focus smarter. Build habits. Get things done.',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(body, style: const TextStyle(fontSize: 14, height: 1.5)),
+                  const SizedBox(height: 24),
+                  const Text('Key Features', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  _bullet('Pomodoro timer with work/break cycles'),
+                  _bullet('Customizable default durations'),
+                  _bullet('Reliable end-of-session alarm on Android'),
+                  _bullet('Notification status while a session runs'),
+                  _bullet('Optional app whitelist for focus mode'),
+                  const SizedBox(height: 24),
+                  const Text('Contact & Credits', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Built for students and anyone who wants to focus more effectively. '
+                    'Made with Flutter. Icons by Material Icons.',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Focus smarter. Build habits. Get things done.',
-                style: TextStyle(color: Colors.grey[700]),
-              ),
-              const SizedBox(height: 16),
-              Text(body, style: const TextStyle(fontSize: 14, height: 1.5)),
-              const SizedBox(height: 24),
-              const Text('Key Features', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              _bullet('Pomodoro timer with work/break cycles'),
-              _bullet('Customizable default durations'),
-              _bullet('Reliable end-of-session alarm on Android'),
-              _bullet('Notification status while a session runs'),
-              _bullet('Optional app whitelist for focus mode'),
-              const SizedBox(height: 24),
-              const Text('Contact & Credits', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(
-                'Built for students and anyone who wants to focus more effectively. '
-                'Made with Flutter. Icons by Material Icons.',
-                style: TextStyle(color: Colors.grey[700]),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
